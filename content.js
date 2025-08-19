@@ -1,23 +1,21 @@
 /**
- *  SciTrue – content script with enable/disable toggle + API integration
+ *  SciTrue – content script with enable/disable toggle + API integration (streaming)
  *  --------------------------------------------------------------------
  *  • Toggle source: chrome.storage.local.scitrueEnabled (default true)
  *  • Two entry points:
- *      – Selection → “Evaluate” button → call /api/analyze_claim
+ *      – Selection → “Evaluate” button → call /api/analyze_claim_stream (NDJSON streaming)
  *      – Double-click empty area → input box → “Evaluate” → same API
  *  • UX:
- *      – Blocking modal shows loading; cannot be closed by outside click
- *      – Close only via the × button
- *      – Renders pretty result view on success; error card on failure
+ *      – Blocking modal; cannot be closed by outside click, only via ×
+ *      – Progressive rendering: subclaims appear one-by-one; summary/overall update when ready
  */
 
 (() => {
   'use strict';
 
   // --------------------------- config ---------------------------
-  const API_URL = 'http://localhost:5002/api/analyze_claim';
+  const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
   const DEFAULT_K = 5;
-  const REQUEST_TIMEOUT_MS = 120000; // 30s timeout
 
   // ---------- global on/off ----------
   let enabled = true; // will be hydrated below
@@ -141,38 +139,29 @@
 
   function showLoadingInModal(claimText) {
     openModalSkeleton();
-
     const wrap = document.createElement('div');
     Object.assign(wrap.style, {
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
       gap:'14px', padding:'28px 8px'
     });
-
-    // Spinner
     const spinner = document.createElement('div');
     Object.assign(spinner.style, {
       width:'46px', height:'46px', borderRadius:'50%',
       border:'4px solid #2b3242', borderTop:'4px solid #3aa1ff',
       animation:'scitrue-spin 0.9s linear infinite'
     });
-    // keyframes (idempotent is fine)
     const style = document.createElement('style');
     style.textContent = '@keyframes scitrue-spin{to{transform:rotate(360deg)}}';
     document.head.appendChild(style);
-
     const line1 = document.createElement('div');
     line1.textContent = 'Analyzing claim…';
     Object.assign(line1.style, { fontSize:'15px', fontWeight:'600' });
-
     const line2 = document.createElement('div');
     line2.textContent = `“${claimText}”`;
     Object.assign(line2.style, {
       fontSize:'13px', color:'#c3cad5', textAlign:'center', maxWidth:'640px'
     });
-
-    wrap.appendChild(spinner);
-    wrap.appendChild(line1);
-    wrap.appendChild(line2);
+    wrap.appendChild(spinner); wrap.appendChild(line1); wrap.appendChild(line2);
     modalBody.replaceChildren(wrap);
   }
 
@@ -186,201 +175,204 @@
     modalBody.replaceChildren(box);
   }
 
-  function renderResultInModal(result) {
-    // Expected shape (example):
-    // {
-    //   articles: 5,
-    //   claim: "Human are not animals.",
-    //   summary: "...",
-    //   "overall reason for accuracy": "...",
-    //   subclaims: [{ title, venue/journal_title, year, label/relation, url, "relevant sentence"/relevant_sentence, relation_reason/function_reason }, ...]
-    // }
+  function ensureIncrementalUI() {
+    const root = document.createElement('div');
+    root.id = 'scitrue-incremental-root';
+    Object.assign(root.style, { display:'grid', gap:'12px' });
 
-    const container = document.createElement('div');
-    Object.assign(container.style, { display:'grid', gap:'12px' });
-
-    // Top summary card
     const summary = document.createElement('div');
+    summary.id = 'scitrue-summary';
     Object.assign(summary.style, {
       background:'#0f1420', border:'1px solid #22314b', borderRadius:'10px',
       padding:'12px 14px'
     });
-
-    function sanitizeSummaryHTML(raw) {
-      if (!raw) return '';
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(String(raw), 'text/html');
-
-      (function walk(node) {
-        const kids = Array.from(node.childNodes);
-        for (const child of kids) {
-          if (child.nodeType === Node.ELEMENT_NODE) {
-            if (child.tagName !== 'A') {
-              // Replace non-<a> elements with their text content
-              child.replaceWith(document.createTextNode(child.textContent || ''));
-              continue;
-            }
-            // For <a>: keep only safe http/https links
-            const href = child.getAttribute('href') || '';
-            let ok = false, urlStr = '#';
-            try {
-              const u = new URL(href, location.href);
-              if (/^https?:$/i.test(u.protocol)) { ok = true; urlStr = u.toString(); }
-            } catch {}
-            if (!ok) {
-              child.replaceWith(document.createTextNode(child.textContent || ''));
-              continue;
-            }
-            child.setAttribute('href', urlStr);
-            child.setAttribute('target', '_blank');
-            child.setAttribute('rel', 'noopener noreferrer');
-            // Make it look like a link in the dark UI
-            child.style.color = '#3aa1ff';
-            child.style.textDecoration = 'underline';
-          }
-        }
-      })(doc.body);
-
-      return doc.body.innerHTML;
-    }
-
-    const sanitizedSummaryHTML = sanitizeSummaryHTML(result.summary);
-
     summary.innerHTML = `
       <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;">
-        <div style="font-size:14px;font-weight:600;">
-          Result Overview
-        </div>
-        <div style="font-size:12px;opacity:.85">
-          Articles: <b>${safe(result.articles)}</b>
-        </div>
+        <div style="font-size:14px;font-weight:600;">Result Overview</div>
+        <div style="font-size:12px;opacity:.85">Articles: <b id="scitrue-articles">…</b></div>
       </div>
       <div style="margin-top:8px;font-size:13px;opacity:.9">
         <div style="color:#a7b4c7">Claim</div>
-        <div style="margin-top:4px;font-weight:600">${safe(result.claim)}</div>
+        <div style="margin-top:4px;font-weight:600" id="scitrue-claim">…</div>
       </div>
-      ${result.summary ? `
       <div style="margin-top:10px;font-size:13px;opacity:.92">
         <div style="color:#a7b4c7">Summary</div>
-        <div style="margin-top:4px">${sanitizedSummaryHTML}</div>
-      </div>` : ''}
-      ${result['overall reason for accuracy'] ? `
+        <div style="margin-top:4px" id="scitrue-summary-html"><i>Waiting…</i></div>
+      </div>
       <div style="margin-top:10px;font-size:13px;opacity:.92">
         <div style="color:#a7b4c7">Overall Reason</div>
-        <div style="margin-top:4px">${safe(result['overall reason for accuracy'])}</div>
-      </div>` : ''}
+        <div style="margin-top:4px" id="scitrue-overall"><i>Waiting…</i></div>
+      </div>
     `;
 
-    container.appendChild(summary);
+    const evWrap = document.createElement('div');
+    Object.assign(evWrap.style, {
+      background:'#0f1420', border:'1px solid #22314b', borderRadius:'10px',
+      padding:'12px 14px'
+    });
+    evWrap.innerHTML = `<div style="font-size:14px;font-weight:600;margin-bottom:8px">Evidence & Subclaims</div>
+                        <div id="scitrue-subclaims" style="display:grid;gap:10px"></div>`;
 
-    // Subclaims list
-    if (Array.isArray(result.subclaims) && result.subclaims.length) {
-      const listWrap = document.createElement('div');
-      Object.assign(listWrap.style, {
-        background:'#0f1420', border:'1px solid #22314b', borderRadius:'10px',
-        padding:'12px 14px'
-      });
+    root.appendChild(summary);
+    root.appendChild(evWrap);
+    modalBody.replaceChildren(root);
+  }
 
-      const heading = document.createElement('div');
-      heading.textContent = 'Evidence & Subclaims';
-      Object.assign(heading.style, { fontSize:'14px', fontWeight:'600', marginBottom:'8px' });
-      listWrap.appendChild(heading);
+  function appendSubclaimCard(sc) {
+    const list = document.querySelector('#scitrue-subclaims');
+    if (!list) return;
 
-      const list = document.createElement('div');
-      Object.assign(list.style, { display:'grid', gap:'10px' });
+    const card = document.createElement('div');
+    Object.assign(card.style, {
+      border:'1px solid #2a3752', borderRadius:'10px', padding:'10px 12px',
+      background:'#0c1220'
+    });
 
-      result.subclaims.forEach((sc, i) => {
-        const card = document.createElement('div');
-        Object.assign(card.style, {
-          border:'1px solid #2a3752', borderRadius:'10px', padding:'10px 12px',
-          background:'#0c1220'
-        });
-
-        const title = document.createElement('div');
-        title.innerHTML = `
-          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
-            <div>
-              <div style="font-size:13px;font-weight:600;">
-                ${safe(sc.title || `Source #${i+1}`)}
-              </div>
-              <div style="font-size:12px;opacity:.8;margin-top:2px;">
-                ${safe(sc.venue || sc.journal_title || '—')} · ${safe(sc.year || '')}
-              </div>
-            </div>
-            ${sc.url ? `<a href="${safeUrl(sc.url)}" target="_blank" rel="noopener noreferrer"
-               style="font-size:12px;text-decoration:none;border:1px solid #36548b;padding:4px 8px;border-radius:8px">
-               Open</a>` : ''}
+    const titleHtml = `
+      <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:13px;font-weight:600;">
+            ${safe(sc.title || `Source #${(sc.index ?? 0)+1}`)}
           </div>
-        `;
-        card.appendChild(title);
+          <div style="font-size:12px;opacity:.8;margin-top:2px;">
+            ${safe(sc.venue || '')} · ${safe(sc.year || '')}
+          </div>
+        </div>
+        ${sc.url ? `<a href="${safeUrl(sc.url)}" target="_blank" rel="noopener noreferrer"
+           style="font-size:12px;text-decoration:none;border:1px solid #36548b;padding:4px 8px;border-radius:8px">
+           Open</a>` : ''}
+      </div>`;
+    const relBadge = sc.label ? `<div style="display:inline-block;margin-top:8px;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid #3d567e;background:#101b2d;opacity:.95">${safe(sc.label)}</div>` : '';
+    const rs = sc.relevant_sentence ? `<div style="margin-top:8px;font-size:13px;line-height:1.5"><span style="color:#90a4c5">Relevant:</span> ${safe(sc.relevant_sentence)}</div>` : '';
+    const why = sc.relation_reason ? `<div style="margin-top:6px;font-size:12px;opacity:.9"><span style="color:#90a4c5">Reason:</span> ${safe(sc.relation_reason)}</div>` : '';
 
-        const rel = sc.label || sc.relation;
-        if (rel) {
-          const badge = document.createElement('div');
-          Object.assign(badge.style, {
-            display:'inline-block', marginTop:'8px',
-            fontSize:'11px', padding:'2px 8px', borderRadius:'999px',
-            border: '1px solid #3d567e', background:'#101b2d', opacity:.95
-          });
-          badge.textContent = rel;
-          card.appendChild(badge);
+    card.innerHTML = titleHtml + relBadge + rs + why;
+    list.appendChild(card);
+  }
+
+  function sanitizeSummaryHTML(raw) {
+    if (!raw) return '';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(String(raw), 'text/html');
+
+    (function walk(node) {
+      const kids = Array.from(node.childNodes);
+      for (const child of kids) {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          if (child.tagName !== 'A') {
+            child.replaceWith(document.createTextNode(child.textContent || ''));
+            continue;
+          }
+          const href = child.getAttribute('href') || '';
+          let ok = false, urlStr = '#';
+          try {
+            const u = new URL(href, location.href);
+            if (/^https?:$/i.test(u.protocol)) { ok = true; urlStr = u.toString(); }
+          } catch {}
+          if (!ok) {
+            child.replaceWith(document.createTextNode(child.textContent || ''));
+            continue;
+          }
+          child.setAttribute('href', urlStr);
+          child.setAttribute('target', '_blank');
+          child.setAttribute('rel', 'noopener noreferrer');
+          child.style.color = '#3aa1ff';
+          child.style.textDecoration = 'underline';
         }
+      }
+    })(doc.body);
 
-        if (sc['relevant sentence'] || sc.relevant_sentence) {
-          const rs = document.createElement('div');
-          Object.assign(rs.style, { marginTop:'8px', fontSize:'13px', lineHeight:'1.5' });
-          rs.innerHTML = `<span style="color:#90a4c5">Relevant:</span> ${safe(sc['relevant sentence'] || sc.relevant_sentence)}`;
-          card.appendChild(rs);
-        }
-
-        if (sc.relation_reason || sc.function_reason) {
-          const why = document.createElement('div');
-          Object.assign(why.style, { marginTop:'6px', fontSize:'12px', opacity:.9 });
-          why.innerHTML = `<span style="color:#90a4c5">Reason:</span> ${safe(sc.relation_reason || sc.function_reason)}`;
-          card.appendChild(why);
-        }
-
-        list.appendChild(card);
-      });
-
-      listWrap.appendChild(list);
-      container.appendChild(listWrap);
-    }
-
-    modalBody.replaceChildren(container);
+    return doc.body.innerHTML;
   }
 
   /* ------------------------------------------------------------------
-   *  API call + orchestration
+   *  API call (stream) + orchestration
    * ----------------------------------------------------------------*/
-  async function analyzeClaim(claim, k = DEFAULT_K) {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    const res = await fetch(API_URL, {
+  async function analyzeClaimStream(claim, k, onEvent) {
+    const res = await fetch(API_STREAM_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claim, k }),
-      signal: controller.signal
-    }).finally(() => clearTimeout(t));
+    });
 
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
     }
-    return res.json();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 1);
+        if (!line) continue;
+        try {
+          const msg = JSON.parse(line);
+          onEvent?.(msg);
+        } catch (e) {
+        }
+      }
+    }
   }
 
   async function runAnalysisFlow(claimText) {
     if (!enabled) return;
-    showLoadingInModal(claimText);
+
+    openModalSkeleton();
+    ensureIncrementalUI();
+
+    const claimEl = document.querySelector('#scitrue-claim');
+    const artEl   = document.querySelector('#scitrue-articles');
+    const sumEl   = document.querySelector('#scitrue-summary-html');
+    const overEl  = document.querySelector('#scitrue-overall');
+    if (claimEl) claimEl.textContent = claimText;
+
     try {
-      const result = await analyzeClaim(claimText, DEFAULT_K);
-      renderResultInModal(result);
+      const onEvent = (msg) => {
+        switch (msg.type) {
+          case 'start': {
+            // 可选：展示状态
+            break;
+          }
+          case 'articles': {
+            if (artEl) artEl.textContent = String(msg.count ?? '0');
+            break;
+          }
+          case 'subclaim': {
+            if (msg.data) appendSubclaimCard(msg.data);
+            break;
+          }
+          case 'summary': {
+            if (sumEl) sumEl.innerHTML = sanitizeSummaryHTML(msg.html || '');
+            break;
+          }
+          case 'overall_reason': {
+            if (overEl) overEl.textContent = msg.text || '';
+            break;
+          }
+          case 'error': {
+            renderErrorInModal(`Failed: ${msg.message || 'Unknown error'}`);
+            break;
+          }
+          case 'done': {
+            break;
+          }
+        }
+      };
+
+      await analyzeClaimStream(claimText, DEFAULT_K, onEvent);
     } catch (err) {
       renderErrorInModal(
-        `Failed to analyze. ${err?.message || err || 'Unknown error.'}\n` +
-        `• Ensure the API is running at ${API_URL}\n` +
+        `Failed to analyze (stream). ${err?.message || err || 'Unknown error.'}\n` +
+        `• Ensure the API is running at ${API_STREAM_URL}\n` +
         `• Check network / CORS / firewall`
       );
     }
@@ -461,7 +453,7 @@
     Object.assign(btn.style, { top: `${y}px`, left: `${x}px` });
     btn.onclick = () => {
       removeActionBtn();
-      runAnalysisFlow(selectedText); // Blocking modal + API call
+      runAnalysisFlow(selectedText); // Modal + Streaming
     };
     document.body.appendChild(btn);
   }
@@ -529,7 +521,7 @@
       const val = textarea.value.trim();
       if (!val) { textarea.style.border = '1px solid #ff5555'; textarea.focus(); return; }
       removeInputBox();
-      runAnalysisFlow(val); // Blocking modal + API call
+      runAnalysisFlow(val); // Modal + Streaming
     };
 
     box.appendChild(textarea);
