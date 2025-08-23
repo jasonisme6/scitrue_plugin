@@ -140,8 +140,9 @@
       status: 'running',
       summaryHTML: '',
       overallText: '',
+      verdictColor: '',
       subclaims: [],
-      articlesCount: null,
+      articlesCount: DEFAULT_K,
       infoMessage: '',
       elements: {},
       __details: null,
@@ -335,6 +336,13 @@
     return doc.body.innerHTML;
   }
 
+function applyVerdictColor(job) {
+  const c = job.verdictColor || '#000000';
+  const el = job.__full || {};
+  if (el.verdictSection) el.verdictSection.style.border = `2px solid ${c}`;
+  if (el.verdictHeading) el.verdictHeading.style.color = c;
+}
+
   function toggleDetails(job) {
     ensureGlobalStyles();
 
@@ -366,6 +374,7 @@
         if (!atTop && !atBottom) { e.preventDefault(); el.scrollTop += e.deltaY; }
       }, { passive: false });
 
+      const vColor = job.verdictColor || '#000000';
       const wrap = document.createElement('div');
       wrap.innerHTML = `
         <section style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#fff;color:#000">
@@ -375,8 +384,8 @@
           </div>
         </section>
 
-       <section style="border:2px solid #ef4444;border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#fff;color:#000">
-        <div style="font-weight:800;font-size:16px;margin-bottom:8px;color:#ef4444">Verdict and Reason:</div>
+       <section id="${job.id}_verdict_section" style="border:2px solid ${vColor};border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#fff;color:#000">
+        <div id="${job.id}_verdict_heading" style="font-weight:800;font-size:16px;margin-bottom:8px;color:${vColor}">Verdict and Reason:</div>
         <div id="${job.id}_full_overall" style="line-height:1.6">
             ${job.overallText ? '' : `<div style="height:18px;width:60%;border-radius:6px;background:#f3f4f6"></div>`}
         </div>
@@ -392,7 +401,9 @@
       const el = {
         summary: details.querySelector(`#${job.id}_full_summary`),
         overall: details.querySelector(`#${job.id}_full_overall`),
-        list:    details.querySelector(`#${job.id}_full_list`)
+        list:    details.querySelector(`#${job.id}_full_list`),
+        verdictSection: details.querySelector(`#${job.id}_verdict_section`),
+        verdictHeading: details.querySelector(`#${job.id}_verdict_heading`),
       };
       if (job.summaryHTML)  el.summary.innerHTML = job.summaryHTML;
       if (job.overallText)  el.overall.textContent = job.overallText;
@@ -404,7 +415,7 @@
       job.__full = el;
       job.expanded = true;
       btnDetails.textContent = 'Hide Details';
-
+      applyVerdictColor(job);
       const current = card.getBoundingClientRect();
       const targetH = Math.min(Math.max(current.height, 260), Math.floor(window.innerHeight * 0.45));
       card.style.height = `${targetH}px`;
@@ -481,8 +492,9 @@
     };
 
     const title      = pick(sc, ['title']);
-    const claimTxt   = pick(sc, ['claim']);
+    const claimTxt   = pick(sc, ['paper_claim', 'paper_claim_text', 'claim', 'claim_text', 'subclaim']);
     const paragraph  = pick(sc, ['paragraph']);
+    const section    = pick(sc, ['section','paper_section','context_section']);
     const abstract   = pick(sc, ['abstract']);
     const url        = pick(sc, ['url']);
     const year       = pick(sc, ['year']);
@@ -537,10 +549,11 @@
     const rowsHTML =
         (claimTxt ? row('Claim', safeTxt(claimTxt)) : '')
       + (title ? row('Title', safeTxt(title)) : '')
-      + (year ? row('Year', safeTxt(year)) : '')
-      + (url ? row('URL', `<a href="${safeU(url)}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.accent};text-decoration:underline">${safeTxt(url)}</a>`) : '')
       + (paragraph ? collapsible('Paragraph', `<div>${safeTxt(paragraph)}</div>`) : '')
+      + (section ? row('Section', safeTxt(section)) : '')
+      + (url ? row('URL', `<a href="${safeU(url)}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.accent};text-decoration:underline">${safeTxt(url)}</a>`) : '')
       + (abstract ? collapsible('Abstract', `<div>${safeTxt(abstract)}</div>`) : '')
+      + (year ? row('Year', safeTxt(year)) : '')
       + (relSent ? row('Relevant Sentence', safeTxt(relSent)) : '')
       + (label ? row('Label', safeTxt(label)) : '')
       + (suppAss ? collapsible('Supporting Assumptions', listify(suppAss)) : '')
@@ -669,14 +682,6 @@
               btnDetails.style.display = 'none';
               break;
 
-            case 'articles': {
-              const n = msg.count ?? 0;
-              job.articlesCount = n;
-              setStatus(n ? `Articles: ${n}` : 'No articles found');
-              if (!n) { markInvalid(); invalid = true; }
-              break;
-            }
-
             case 'summary': {
               const html = sanitizeSummaryHTML(msg.html || '');
               job.summaryHTML = html;
@@ -699,7 +704,11 @@
 
             case 'overall_reason': {
               job.overallText = msg.text || '';
-              if (job.__full) job.__full.overall.textContent = job.overallText;
+              job.verdictColor = msg.color || '#000000';
+              if (job.__full) {
+                job.__full.overall.textContent = job.overallText;
+                applyVerdictColor(job);
+              }
               setStatus('Evaluating verdict');
               btnDetails.style.display = '';
               break;
@@ -732,6 +741,7 @@
 
             case 'error':
               errored = true;
+              console.log(msg);
               markInvalid();
               invalid = true;
               break;
