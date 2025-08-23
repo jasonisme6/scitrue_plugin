@@ -85,10 +85,10 @@
     const s = document.createElement('style');
     s.id = 'scitrue-global-styles';
     s.textContent = `
-      .scitrue-details{scrollbar-width:thin;scrollbar-color:#2a3448 transparent;}
-      .scitrue-details::-webkit-scrollbar{width:6px;height:6px}
-      .scitrue-details::-webkit-scrollbar-track{background:transparent}
-      .scitrue-details::-webkit-scrollbar-thumb{background:#2a3448;border-radius:6px}
+        .scitrue-details{scrollbar-width:thin;scrollbar-color:#2a3448 transparent;}
+        .scitrue-details::-webkit-scrollbar{width:4px;height:4px}
+        .scitrue-details::-webkit-scrollbar-track{background:transparent}
+        .scitrue-details::-webkit-scrollbar-thumb{background:#2a3448;border-radius:4px}
     `;
     document.head.appendChild(s);
   }
@@ -365,25 +365,24 @@
 
       const wrap = document.createElement('div');
       wrap.innerHTML = `
-        <section style="border:1px solid ${PALETTE.border};border-radius:10px;padding:12px;margin-bottom:12px;background:${PALETTE.cardBg}">
-          <div style="font-weight:700;margin-bottom:6px">Summary</div>
+        <section style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#fff;color:#000">
+          <div style="font-weight:800;font-size:16px;margin-bottom:8px">Summary:</div>
           <div id="${job.id}_full_summary" style="line-height:1.6">
-            ${job.summaryHTML ? '' : `<div style="height:64px;border-radius:8px;background:#10141e"></div>`}
+            ${job.summaryHTML ? '' : `<div style="height:18px;width:60%;border-radius:6px;background:#f3f4f6"></div>`}
           </div>
         </section>
-        <section style="border:1px solid ${PALETTE.border};border-radius:10px;padding:12px;margin-bottom:12px;background:${PALETTE.cardBg}">
-          <div style="font-weight:700;margin-bottom:6px">Overall Verdict</div>
-          <div id="${job.id}_full_overall" style="line-height:1.6">
-            ${job.overallText ? '' : `<div style="height:18px;width:60%;border-radius:6px;background:#10141e"></div>`}
-          </div>
+
+       <section style="border:2px solid #ef4444;border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#fff;color:#000">
+        <div style="font-weight:800;font-size:16px;margin-bottom:8px;color:#ef4444">Verdict and Reason:</div>
+        <div id="${job.id}_full_overall" style="line-height:1.6">
+            ${job.overallText ? '' : `<div style="height:18px;width:60%;border-radius:6px;background:#f3f4f6"></div>`}
+        </div>
         </section>
-        <section style="border:1px solid ${PALETTE.border};border-radius:10px;background:${PALETTE.cardBg};padding:12px">
-          <div style="font-weight:700;margin-bottom:6px">Subclaims</div>
-          <div id="${job.id}_full_list" style="display:grid;gap:10px">
-            ${job.subclaims.length ? '' : `<div style="height:18px;border-radius:6px;background:#10141e"></div>`}
-          </div>
-        </section>
+
+        <div id="${job.id}_full_list"
+             style="display:grid;gap:10px;margin-top:8px"></div>
       `;
+
       details.appendChild(wrap);
       card.appendChild(details);
 
@@ -437,32 +436,30 @@
       {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]
     )));
     const safeU = (u) => { try { return u ? new URL(u, location.href).toString() : ''; } catch { return ''; } };
-
-    const link = (label, id) =>
-      `<a href="#" data-toggle="${id}" style="color:${PALETTE.accent};text-decoration:underline">Show ${safeTxt(label)}</a>`;
-
+const linkBtn = (label, id) =>
+  `<button type="button" data-toggle="${id}" data-label="${safeTxt(label)}"
+           style="background:inherit;border:none;padding:0;margin-left:8px;
+                  font:inherit;cursor:pointer;color:${PALETTE.accent};
+                  outline:none">Show ${safeTxt(label)}</button>`;
     const row = (label, valueHTML) => `
-      <div style="margin-top:8px;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px">
+      <div style="margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px">
         <span style="font-weight:700">${safeTxt(label)}:</span> ${valueHTML}
       </div>`;
-
-    const collapsible = (label, innerHTML) => {
-      if (!innerHTML) return '';
-      const id = `${label.replace(/\W+/g,'_')}_${Math.random().toString(36).slice(2,8)}`;
-      return `
-        <div style="margin-top:8px;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px">
-          <span style="font-weight:700">${safeTxt(label)}:</span>
-          ${link(label, id)}
-          <div id="${id}" style="display:none;margin-top:6px;line-height:1.55">${innerHTML}</div>
-        </div>`;
-    };
-
+const collapsible = (label, innerHTML) => {
+  if (!innerHTML) return '';
+  const id = `${label.replace(/\W+/g,'_')}_${Math.random().toString(36).slice(2,8)}`;
+  return `
+    <div style="margin-top:8px;background:rgba(0,0,0,0.03);padding:6px 8px;border-radius:6px">
+      <span style="font-weight:700">${safeTxt(label)}:</span>
+      ${linkBtn(label, id)}
+      <div id="${id}" style="display:none;margin-top:6px;line-height:1.55">${innerHTML}</div>
+    </div>`;
+};
     const listify = (arr) => {
       if (!arr) return '';
       if (Array.isArray(arr)) return `<ul style="margin:6px 0 0 16px;padding:0">${arr.map(x=>`<li>${safeTxt(x)}</li>`).join('')}</ul>`;
       return `<div>${safeTxt(String(arr))}</div>`;
     };
-
     const renderSjr = (sjrObj) => {
       if (!sjrObj || typeof sjrObj !== 'object' || !Object.keys(sjrObj).length) return '';
       const rows = Object.entries(sjrObj).map(([k,v]) => {
@@ -493,37 +490,40 @@
     const relReason  = pick(sc, ['relation_reason']);
     const bibtex     = pick(sc, ['bibtex']);
 
-    const card = document.createElement('div');
-    Object.assign(card.style, {
+    const container = document.createElement('div');
+    Object.assign(container.style, {
       border:`1px solid ${PALETTE.border}`,
       borderRadius:'10px',
-      padding:'10px 12px',
       background: SUBCLAIM_BG_COLORS[(sc.index ?? 0) % SUBCLAIM_BG_COLORS.length],
-      fontSize:'13px',
-      transition: 'transform .08s ease',
-      color:'#000'
+      color:'#000',
+      overflow:'hidden'
     });
-    card.onmouseenter = () => { card.style.transform = 'translateY(-1px)'; };
-    card.onmouseleave = () => { card.style.transform = 'none'; };
 
     const n = (sc.index ?? 0) + 1;
     const badgeId = `sc_badge_${jobId}_${sc.index ?? 0}`;
     const badgeColor = colorForContribution(contributionText) || '#444';
-    const headHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="font-weight:700;font-size:16px">Subclaim ${n}</div>
-          <div id="${badgeId}"
-               style="display:${contributionText ? 'inline-block' : 'none'};
-                      font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600;
-                      background:#fff !important;
-                      border:1.5px solid ${badgeColor} !important;
-                      color:${badgeColor} !important;">
-               ${safeTxt(contributionText)}
-          </div>
+
+    const header = document.createElement('div');
+    header.setAttribute('role','button');
+    Object.assign(header.style, {
+      display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px',
+      padding:'10px 12px', cursor:'pointer', userSelect:'none'
+    });
+    header.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="sc-caret" style="display:inline-block;transform:rotate(0deg);transition:transform .12s ease">▶</span>
+        <div style="font-weight:700;font-size:16px">Subclaim ${n}</div>
+        <div id="${badgeId}"
+             style="display:${contributionText ? 'inline-block' : 'none'};
+                    font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600;
+                    background:#fff !important;border:1.5px solid ${badgeColor} !important;color:${badgeColor} !important;">
+             ${safeTxt(contributionText)}
         </div>
       </div>
     `;
+
+    const body = document.createElement('div');
+    Object.assign(body.style, { padding:'0 12px 10px', display:'none' }); // default collapsed
 
     const rowsHTML =
         (claimTxt ? row('Claim', safeTxt(claimTxt)) : '')
@@ -545,21 +545,34 @@
           : '')
       + (bibtex ? collapsible('BibTeX', `<pre style="white-space:pre-wrap;margin:0">${safeTxt(bibtex)}</pre>`) : '');
 
-    card.innerHTML = headHTML + rowsHTML;
+    body.innerHTML = rowsHTML;
 
-    card.querySelectorAll('a[data-toggle]').forEach(a => {
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        const id = a.getAttribute('data-toggle');
-        const panel = card.querySelector(`#${id}`);
-        const visible = panel.style.display !== 'none';
-        panel.style.display = visible ? 'none' : 'block';
-        a.textContent = (visible ? 'Show ' : 'Hide ') + a.textContent.replace(/^Show |^Hide /,'');
-      });
+body.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-toggle]');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const id = btn.getAttribute('data-toggle');
+  const label = btn.getAttribute('data-label') || 'Section';
+  const target = body.querySelector(`#${CSS.escape(id)}`);
+  if (!target) return;
+  const open = target.style.display !== 'none';
+  target.style.display = open ? 'none' : 'block';
+  btn.textContent = (open ? 'Show ' : 'Hide ') + label;
+});
+
+    header.addEventListener('click', () => {
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : 'block';
+      const caret = header.querySelector('.sc-caret');
+      if (caret) caret.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
     });
 
-    listEl.appendChild(card);
+    container.appendChild(header);
+    container.appendChild(body);
+    listEl.appendChild(container);
   }
+
 
   // --- Contribution badge utilities ---
   function applyContributionBadgeStyles(badge, contrib) {
@@ -595,7 +608,7 @@
     let errored = false;
     let invalid = false;
 
-    setStatus('Analyzing…');
+    setStatus('Analyzing');
 
     try {
       const res = await fetch(API_STREAM_URL, {
@@ -643,7 +656,7 @@
 
             case 'start':
               statusDot.style.background = '#3aa1ff';
-              setStatus('Fetching evidence…');
+              setStatus('Fetching evidence');
               setInfoMessage(job, 'fetching');
               btnDetails.style.display = 'none';
               break;
@@ -679,7 +692,7 @@
             case 'overall_reason': {
               job.overallText = msg.text || '';
               if (job.__full) job.__full.overall.textContent = job.overallText;
-              setStatus('Evaluating verdict...');
+              setStatus('Evaluating verdict');
               btnDetails.style.display = '';
               break;
             }
@@ -694,7 +707,7 @@
                   appendSubclaimCard(job.__full.list, data, job.id);
                   updateContributionBadge(job, index);
                 }
-                setStatus(`Adding subclaims… (${job.subclaims.length})`);
+                setStatus('Adding subclaims');
                 btnDetails.style.display = '';
               }
               break;
