@@ -15,9 +15,8 @@
   const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
   const DEFAULT_K = 5;
 
-  // collapsed/expanded 固定宽度设置
   const COLLAPSED_WIDTH_CSS = 'clamp(320px, 26vw, 520px)';
-  const EXPANDED_WIDTH_PX   = 720; // 展开时目标固定宽度（px）
+  const EXPANDED_WIDTH_PX   = 720;
 
   const PALETTE = {
     panelBg: '#0f1420',
@@ -156,7 +155,7 @@
 
   function renderJobCard(job) {
     const card = document.createElement('div');
-    card.className = 'scitrue-card'; // 让四击时能识别“弹窗内”
+    card.className = 'scitrue-card';
     Object.assign(card.style, {
       position: 'absolute',
       left: `${(job.initialPos?.x ?? (window.scrollX + window.innerWidth - 420 - 16))}px`,
@@ -236,7 +235,6 @@
 
     document.body.appendChild(card);
 
-    // 初次渲染：让收起高度按内容自适应，并记录
     refreshCollapsedSize(job);
 
     btnDetails.onclick = () => toggleDetails(job);
@@ -270,11 +268,11 @@
     if (!card || !infoBar) return;
 
     const prevDisplay = infoBar.style.display;
-    infoBar.style.display = 'block';     // 确保测量到提示行
+    infoBar.style.display = 'block';
 
     card.style.resize = 'none';
-    card.style.height = 'auto';          // 按内容撑开
-    void card.offsetHeight;              // 强制 reflow
+    card.style.height = 'auto';
+    void card.offsetHeight;
     job.collapsedHeight = Math.max(card.offsetHeight, 64);
 
     infoBar.style.display = prevDisplay || 'block';
@@ -300,7 +298,6 @@
     job.infoMessage = msg;
     infoBar.textContent = msg;
 
-    // 收起状态下，高度随文案变化自适应
     if (!job.expanded) refreshCollapsedSize(job);
   }
 
@@ -340,10 +337,8 @@
     const { card, btnDetails, infoBar } = job.elements;
 
     if (!job.expanded) {
-      // 展开：隐藏 info，增加固定宽度，限制高度并允许 resize
       infoBar.style.display = 'none';
 
-      // 固定展开宽度，且不超出视口
       const targetW = Math.min(EXPANDED_WIDTH_PX, Math.max(360, window.innerWidth - 32));
       card.style.width  = `${targetW}px`;
 
@@ -359,7 +354,6 @@
         maxHeight: '60vh'
       });
 
-      // 让滚轮主要滚动详情区
       details.addEventListener('wheel', (e) => {
         const el = details;
         const atTop = el.scrollTop === 0 && e.deltaY < 0;
@@ -409,7 +403,6 @@
       card.style.height = `${targetH}px`;
       card.style.resize = 'both';
     } else {
-      // 收起：移除 details，恢复固定宽度与高度（自适应）
       try { job.__details?.remove(); } catch {}
       job.__details = null;
       job.__full = null;
@@ -417,12 +410,11 @@
       btnDetails.textContent = 'Show Details';
 
       card.style.resize = 'none';
-      card.style.width  = job.collapsedWidthCSS; // 恢复 clamp 固定宽度
+      card.style.width  = job.collapsedWidthCSS;
 
       infoBar.style.display = 'block';
       job.elements.infoBar.textContent = job.infoMessage || job.elements.infoBar.textContent;
 
-      // 关键：让高度按内容自动撑开，并刷新测量
       refreshCollapsedSize(job);
     }
   }
@@ -784,7 +776,7 @@
       height: '28px',
       resize: 'none',
       overflowY: 'hidden',
-      overflowX: 'hidden',     // 无横向滚动条
+      overflowX: 'hidden',
       whiteSpace: 'pre-wrap',
       wordBreak: 'break-word',
       padding: '2px 8px',
@@ -858,7 +850,6 @@
     }, 10);
   }, true);
 
-  // 四击：如果在弹窗/输入框内部，则不弹输入框
   document.addEventListener('click', (e) => {
     if (!enabled) return;
     if (e.detail === 4) {
