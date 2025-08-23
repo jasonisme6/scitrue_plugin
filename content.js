@@ -89,6 +89,9 @@
         .scitrue-details::-webkit-scrollbar{width:4px;height:4px}
         .scitrue-details::-webkit-scrollbar-track{background:transparent}
         .scitrue-details::-webkit-scrollbar-thumb{background:#2a3448;border-radius:4px}
+        .scitrue-subclaim{padding-top:0}
+        .scitrue-subclaim .sc-row{margin-top:0}
+        .scitrue-subclaim .sc-row + .sc-row{margin-top:6px}
     `;
     document.head.appendChild(s);
   }
@@ -436,30 +439,35 @@
       {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]
     )));
     const safeU = (u) => { try { return u ? new URL(u, location.href).toString() : ''; } catch { return ''; } };
-const linkBtn = (label, id) =>
-  `<button type="button" data-toggle="${id}" data-label="${safeTxt(label)}"
-           style="background:inherit;border:none;padding:0;margin-left:8px;
-                  font:inherit;cursor:pointer;color:${PALETTE.accent};
-                  outline:none">Show ${safeTxt(label)}</button>`;
+
+    const linkBtn = (label, id) =>
+      `<button type="button" data-toggle="${id}" data-label="${safeTxt(label)}"
+               style="background:inherit;border:none;padding:0;margin-left:8px;
+                      font:inherit;cursor:pointer;color:${PALETTE.accent};
+                      outline:none">Show ${safeTxt(label)}</button>`;
+
     const row = (label, valueHTML) => `
-      <div style="margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px">
+      <div class="sc-row" style="margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px">
         <span style="font-weight:700">${safeTxt(label)}:</span> ${valueHTML}
       </div>`;
-const collapsible = (label, innerHTML) => {
-  if (!innerHTML) return '';
-  const id = `${label.replace(/\W+/g,'_')}_${Math.random().toString(36).slice(2,8)}`;
-  return `
-    <div style="margin-top:8px;background:rgba(0,0,0,0.03);padding:6px 8px;border-radius:6px">
-      <span style="font-weight:700">${safeTxt(label)}:</span>
-      ${linkBtn(label, id)}
-      <div id="${id}" style="display:none;margin-top:6px;line-height:1.55">${innerHTML}</div>
-    </div>`;
-};
+
+    const collapsible = (label, innerHTML) => {
+      if (!innerHTML) return '';
+      const id = `${label.replace(/\W+/g,'_')}_${Math.random().toString(36).slice(2,8)}`;
+      return `
+        <div class="sc-row" style="margin-top:8px;background:rgba(0,0,0,0.03);padding:6px 8px;border-radius:6px">
+          <span style="font-weight:700">${safeTxt(label)}:</span>
+          ${linkBtn(label, id)}
+          <div id="${id}" style="display:none;margin-top:6px;line-height:1.55">${innerHTML}</div>
+        </div>`;
+    };
+
     const listify = (arr) => {
       if (!arr) return '';
       if (Array.isArray(arr)) return `<ul style="margin:6px 0 0 16px;padding:0">${arr.map(x=>`<li>${safeTxt(x)}</li>`).join('')}</ul>`;
       return `<div>${safeTxt(String(arr))}</div>`;
     };
+
     const renderSjr = (sjrObj) => {
       if (!sjrObj || typeof sjrObj !== 'object' || !Object.keys(sjrObj).length) return '';
       const rows = Object.entries(sjrObj).map(([k,v]) => {
@@ -523,6 +531,7 @@ const collapsible = (label, innerHTML) => {
     `;
 
     const body = document.createElement('div');
+    body.className = 'scitrue-subclaim';
     Object.assign(body.style, { padding:'0 12px 10px', display:'none' }); // default collapsed
 
     const rowsHTML =
@@ -547,19 +556,19 @@ const collapsible = (label, innerHTML) => {
 
     body.innerHTML = rowsHTML;
 
-body.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-toggle]');
-  if (!btn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const id = btn.getAttribute('data-toggle');
-  const label = btn.getAttribute('data-label') || 'Section';
-  const target = body.querySelector(`#${CSS.escape(id)}`);
-  if (!target) return;
-  const open = target.style.display !== 'none';
-  target.style.display = open ? 'none' : 'block';
-  btn.textContent = (open ? 'Show ' : 'Hide ') + label;
-});
+    body.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-toggle]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.getAttribute('data-toggle');
+      const label = btn.getAttribute('data-label') || 'Section';
+      const target = body.querySelector(`#${CSS.escape(id)}`);
+      if (!target) return;
+      const open = target.style.display !== 'none';
+      target.style.display = open ? 'none' : 'block';
+      btn.textContent = (open ? 'Show ' : 'Hide ') + label;
+    });
 
     header.addEventListener('click', () => {
       const open = body.style.display !== 'none';
@@ -572,7 +581,6 @@ body.addEventListener('click', (e) => {
     container.appendChild(body);
     listEl.appendChild(container);
   }
-
 
   // --- Contribution badge utilities ---
   function applyContributionBadgeStyles(badge, contrib) {
@@ -727,7 +735,6 @@ body.addEventListener('click', (e) => {
               markInvalid();
               invalid = true;
               break;
-
             case 'done':
               if (!invalid && !errored) {
                 job.status = 'done';
@@ -791,126 +798,114 @@ body.addEventListener('click', (e) => {
     document.body.appendChild(btn);
   }
 
-// Input panel (quadruple-click). Draggable; fixed width, auto-growing height (no inner scrollbars).
-function renderInputBox(px, py) {
-  if (!enabled) return;
-  removeInputBox();
-
-  const box = document.createElement('div');
-  box.id = 'scitrue-input';
-  inputBox = box;
-  Object.assign(box.style, {
-    position: 'absolute',
-    top: `${py}px`,
-    left: `${px}px`,
-    width: '520px',          // fixed width
-    minWidth: '380px',
-    height: 'auto',          // let height be content-driven
-    minHeight: '52px',       // baseline height
-    padding: '12px 14px',
-    background: '#111',
-    color: '#fff',
-    border: '1px solid #444',
-    borderRadius: '10px',
-    boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
-    zIndex: 2147483647,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    cursor: 'move',
-    overflow: 'visible'      // no inner scrollbars
-  });
-
-  const textarea = document.createElement('textarea');
-  textarea.rows = 1;
-  textarea.wrap = 'soft';
-  Object.assign(textarea.style, {
-    flex: '1 1 auto',
-    minWidth: '120px',
-    resize: 'none',          // user cannot resize manually
-    overflowY: 'hidden',     // hide scrollbar; we auto-grow instead
-    overflowX: 'hidden',
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-    padding: '6px 8px',
-    fontSize: '14px',
-    lineHeight: '20px',
-    border: '1px solid #555',
-    borderRadius: '6px',
-    background: '#fff',
-    color: '#000',
-    cursor: 'text',
-    height: '28px'           // start at one line; JS will override
-  });
-
-  // Auto-grow / shrink the textarea and let the box follow
-  const autosize = () => {
-    textarea.style.height = 'auto';                    // collapse to measure
-    const h = Math.max(28, textarea.scrollHeight);     // grow to full content
-    textarea.style.height = `${h}px`;
-    // box height is content-driven via flex; no explicit setting needed
-  };
-
-  // Grow on any content changes
-  textarea.addEventListener('input', autosize);
-  textarea.addEventListener('change', autosize);
-  textarea.addEventListener('cut',   () => setTimeout(autosize, 0));
-  textarea.addEventListener('paste', () => setTimeout(autosize, 0));
-
-  // Keep Enter from submitting; wrapping still increases height via autosize
-  textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-    }
-  });
-
-  const evalBtn = makeFancyBtn('Evaluate', false);
-  Object.assign(evalBtn.style, { flex: '0 0 auto', cursor: 'pointer' });
-
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '×';
-  Object.assign(closeBtn.style, {
-    fontSize: '16px',
-    border: '1px solid #444',
-    borderRadius: '6px',
-    background: '#222',
-    color: '#bbb',
-    cursor: 'pointer',
-    padding: '0 8px',
-    flex: '0 0 auto'
-  });
-
-  evalBtn.onclick = () => {
+  // Input panel (quadruple-click). Draggable; fixed width, auto-growing height (no inner scrollbars).
+  function renderInputBox(px, py) {
     if (!enabled) return;
-    const val = textarea.value.trim();
-    if (!val) { textarea.style.border = '1px solid #ff5555'; textarea.focus(); return; }
-    const r = box.getBoundingClientRect();
-    const pos = { x: r.right + 12 + window.scrollX, y: r.top + window.scrollY };
     removeInputBox();
-    createJob(val, DEFAULT_K, pos);
-  };
-  closeBtn.onclick = () => removeInputBox();
 
-  box.appendChild(textarea);
-  box.appendChild(evalBtn);
-  box.appendChild(closeBtn);
-  document.body.appendChild(box);
+    const box = document.createElement('div');
+    box.id = 'scitrue-input';
+    inputBox = box;
+    Object.assign(box.style, {
+      position: 'absolute',
+      top: `${py}px`,
+      left: `${px}px`,
+      width: '520px',
+      minWidth: '380px',
+      height: 'auto',
+      minHeight: '52px',
+      padding: '12px 14px',
+      background: '#111',
+      color: '#fff',
+      border: '1px solid #444',
+      borderRadius: '10px',
+      boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+      zIndex: 2147483647,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      cursor: 'move',
+      overflow: 'visible'
+    });
 
-  // Drag: ignore interactive children
-  makeDraggable(box, box, { ignore: (e) => {
-    const t = e.target;
-    return t === textarea || t === evalBtn || t === closeBtn;
-  }});
+    const textarea = document.createElement('textarea');
+    textarea.rows = 1;
+    textarea.wrap = 'soft';
+    Object.assign(textarea.style, {
+      flex: '1 1 auto',
+      minWidth: '120px',
+      resize: 'none',
+      overflowY: 'hidden',
+      overflowX: 'hidden',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+      padding: '6px 8px',
+      fontSize: '14px',
+      lineHeight: '20px',
+      border: '1px solid #555',
+      borderRadius: '6px',
+      background: '#fff',
+      color: '#000',
+      cursor: 'text',
+      height: '28px'
+    });
 
-  // Keep the panel within viewport horizontally/vertically on spawn
-  const r = box.getBoundingClientRect();
-  if (r.right  > window.innerWidth)  box.style.left = `${window.innerWidth  - r.width  - 12}px`;
-  if (r.bottom > window.innerHeight) box.style.top  = `${window.innerHeight - r.height - 12}px`;
+    const autosize = () => {
+      textarea.style.height = 'auto';
+      const h = Math.max(28, textarea.scrollHeight);
+      textarea.style.height = `${h}px`;
+    };
+    textarea.addEventListener('input', autosize);
+    textarea.addEventListener('change', autosize);
+    textarea.addEventListener('cut',   () => setTimeout(autosize, 0));
+    textarea.addEventListener('paste', () => setTimeout(autosize, 0));
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) e.preventDefault();
+    });
 
-  // Initial sizing (in case of prefilled content or IME composition)
-  autosize();
-}
+    const evalBtn = makeFancyBtn('Evaluate', false);
+    Object.assign(evalBtn.style, { flex: '0 0 auto', cursor: 'pointer' });
 
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    Object.assign(closeBtn.style, {
+      fontSize: '16px',
+      border: '1px solid #444',
+      borderRadius: '6px',
+      background: '#222',
+      color: '#bbb',
+      cursor: 'pointer',
+      padding: '0 8px',
+      flex: '0 0 auto'
+    });
+
+    evalBtn.onclick = () => {
+      if (!enabled) return;
+      const val = textarea.value.trim();
+      if (!val) { textarea.style.border = '1px solid #ff5555'; textarea.focus(); return; }
+      const r = box.getBoundingClientRect();
+      const pos = { x: r.right + 12 + window.scrollX, y: r.top + window.scrollY };
+      removeInputBox();
+      createJob(val, DEFAULT_K, pos);
+    };
+    closeBtn.onclick = () => removeInputBox();
+
+    box.appendChild(textarea);
+    box.appendChild(evalBtn);
+    box.appendChild(closeBtn);
+    document.body.appendChild(box);
+
+    makeDraggable(box, box, { ignore: (e) => {
+      const t = e.target;
+      return t === textarea || t === evalBtn || t === closeBtn;
+    }});
+
+    const r = box.getBoundingClientRect();
+    if (r.right  > window.innerWidth)  box.style.left = `${window.innerWidth  - r.width  - 12}px`;
+    if (r.bottom > window.innerHeight) box.style.top  = `${window.innerHeight - r.height - 12}px`;
+
+    autosize();
+  }
 
   document.addEventListener('mouseup', () => {
     if (!enabled) { removeActionBtn(); return; }
@@ -930,7 +925,6 @@ function renderInputBox(px, py) {
     }, 10);
   }, true);
 
-  // Quadruple click: ignore if inside card or input
   document.addEventListener('click', (e) => {
     if (!enabled) return;
     if (e.detail === 4) {
