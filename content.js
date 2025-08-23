@@ -175,7 +175,7 @@
       boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
       overflow: 'hidden',
       zIndex: 2147483646,
-      userSelect: 'none',
+      userSelect: 'auto',
       display: 'flex',
       flexDirection: 'column',
       resize: 'none'
@@ -364,7 +364,8 @@ function applyVerdictColor(job) {
         flex: '1 1 auto',
         overflow: 'auto',
         padding: '12px',
-        maxHeight: '60vh'
+        maxHeight: '60vh',
+        userSelect: 'text'
       });
 
       details.addEventListener('wheel', (e) => {
@@ -925,11 +926,12 @@ function applyVerdictColor(job) {
       const sel  = window.getSelection();
       const text = sel.toString().trim();
       if (!text || !sel.rangeCount) { removeActionBtn(); return; }
-      if (inputBox) {
         let node = sel.getRangeAt(0).commonAncestorContainer;
         if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
-        if (inputBox.contains(node)) { removeActionBtn(); return; }
-      }
+        const isInsideOurUI =
+        (node.closest && (node.closest('.scitrue-card') || node.closest('#scitrue-input')));
+
+        if (isInsideOurUI) { removeActionBtn(); return; }
       const rect = sel.getRangeAt(0).getBoundingClientRect();
       createActionBtn(rect.right + window.scrollX + 12, rect.top + window.scrollY, text);
     }, 10);

@@ -1,14 +1,14 @@
 # SciTrue – Chrome Extension
 
-SciTrue lets you evaluate scientific claims directly on any webpage.  
-You can select text and click **Evaluate**, or double-click an empty area to enter your own claim.  
-Results appear in a modal window with a clear summary and evidence. If something goes wrong, you’ll see an error card with details.  
+Evaluate scientific claims directly on any webpage.  
+Select text and click **Evaluate**, or **quadruple-click** an empty area to enter your own claim.  
+Results appear in a draggable modal with a clear **Summary**, **Verdict & Reason**, and **Subclaims**.
 
 ## Features
 
-- **One-click Evaluate** – Select text on a normal webpage. A floating “Evaluate” button appears. Click it to run the analysis.
-- **Custom Claim Input** – Double-click an empty area to open a single-line input box. Type your claim and click “Evaluate.”
-- **Result Display** – Modal window shows:
-  - Claim, number of articles, summary, and overall reason
-  - List of evidence/subclaims with source, year, relevant sentence, reason, and link
-- **Enable/Disable Switch** – Toggle the extension on/off in the popup. The state is saved locally.
+- **One-click Evaluate**
+  - Select any text on a normal webpage; a floating **Evaluate** button appears next to the selection.
+  - Click it to stream the analysis from SciTrue API.
+- **Custom Claim Input**
+  - **Quadruple-click** (4×) an empty area to open a compact input box.
+  - Type your claim and click **Evaluate**.
