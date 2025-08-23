@@ -6,7 +6,7 @@
  *  • Each Evaluate spawns a draggable card at click location
  *  • Card: dot + dynamic status + title (multi-line) + Show/Hide Details / ×
  *  • Details expand inside the same card (scrollable): Summary → Overall → Subclaims
- *  • Resize behavior: cards are resizable ONLY when details are expanded
+ *  • Cards are resizable only when details are expanded
  */
 
 (() => {
@@ -15,6 +15,7 @@
   const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
   const DEFAULT_K = 5;
 
+  // Fixed widths
   const COLLAPSED_WIDTH_CSS = 'clamp(320px, 26vw, 520px)';
   const EXPANDED_WIDTH_PX   = 720;
 
@@ -260,7 +261,7 @@
     btn.onmouseleave = () => btn.style.opacity = '1';
   }
 
-  // ----- collapsed size helpers -----
+  // Collapsed size helpers
   function refreshCollapsedSize(job) {
     const els = job.elements || {};
     const card   = els.card;
@@ -278,7 +279,7 @@
     infoBar.style.display = prevDisplay || 'block';
   }
 
-  // ----- info bar helpers -----
+  // Info bar helpers
   function setInfoMessage(job, kind) {
     const { infoBar } = job.elements || {};
     if (!infoBar) return;
@@ -337,6 +338,7 @@
     const { card, btnDetails, infoBar } = job.elements;
 
     if (!job.expanded) {
+      // Expand
       infoBar.style.display = 'none';
 
       const targetW = Math.min(EXPANDED_WIDTH_PX, Math.max(360, window.innerWidth - 32));
@@ -392,7 +394,10 @@
       };
       if (job.summaryHTML)  el.summary.innerHTML = job.summaryHTML;
       if (job.overallText)  el.overall.textContent = job.overallText;
-      if (job.subclaims.length) for (const sc of job.subclaims) appendSubclaimCard(el.list, sc, job.id);
+      if (job.subclaims.length) {
+        for (const sc of job.subclaims) appendSubclaimCard(el.list, sc, job.id);
+        syncAllContributionBadges(job);
+      }
 
       job.__full = el;
       job.expanded = true;
@@ -403,6 +408,7 @@
       card.style.height = `${targetH}px`;
       card.style.resize = 'both';
     } else {
+      // Collapse
       try { job.__details?.remove(); } catch {}
       job.__details = null;
       job.__full = null;
@@ -555,6 +561,33 @@
     listEl.appendChild(card);
   }
 
+  // --- Contribution badge utilities ---
+  function applyContributionBadgeStyles(badge, contrib) {
+    const color = colorForContribution(contrib) || '#444';
+    badge.textContent = contrib || '';
+    if (contrib) {
+      badge.style.display = 'inline-block';
+      badge.style.setProperty('border-color', color, 'important');
+      badge.style.setProperty('color', color, 'important');
+      badge.style.setProperty('background', '#fff', 'important');
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  function updateContributionBadge(job, index) {
+    if (!job.__full) return;
+    const sc = job.subclaims[index] || {};
+    const contrib = (sc.contribution || sc.stance_contribution || '').trim();
+    const badge = job.__full.list?.querySelector?.(`#sc_badge_${job.id}_${index}`);
+    if (badge) applyContributionBadgeStyles(badge, contrib);
+  }
+
+  function syncAllContributionBadges(job) {
+    if (!job.__full) return;
+    for (let i = 0; i < job.subclaims.length; i++) updateContributionBadge(job, i);
+  }
+
   async function runJob(job) {
     const { controller } = job;
     const { statusDot, statusText, btnDetails } = job.elements;
@@ -653,8 +686,14 @@
 
             case 'subclaim': {
               if (msg.data) {
-                job.subclaims.push(msg.data);
-                if (job.__full) appendSubclaimCard(job.__full.list, msg.data, job.id);
+                const data = { ...msg.data };
+                const index = job.subclaims.length;
+                if (data.index == null) data.index = index;
+                job.subclaims.push(data);
+                if (job.__full) {
+                  appendSubclaimCard(job.__full.list, data, job.id);
+                  updateContributionBadge(job, index);
+                }
                 setStatus(`Adding subclaims… (${job.subclaims.length})`);
                 btnDetails.style.display = '';
               }
@@ -664,8 +703,9 @@
             case 'subclaim_update': {
               const i = msg.index ?? 0;
               const data = msg.data || {};
-              const contrib = (data.contribution || '').trim();
-              job.subclaims[i] = { ...(job.subclaims[i] || {}), contribution: contrib };
+              const contrib = (data.contribution || data.stance_contribution || '').trim();
+              job.subclaims[i] = { ...(job.subclaims[i] || {}), ...data, contribution: contrib };
+              updateContributionBadge(job, i);
               break;
             }
 
@@ -682,6 +722,7 @@
                 setStatus('Completed');
                 setInfoMessage(job, 'completed');
                 btnDetails.style.display = '';
+                syncAllContributionBadges(job);
               }
               break;
           }
@@ -737,100 +778,126 @@
     document.body.appendChild(btn);
   }
 
-  // Input panel (quadruple-click). Draggable; width not resizable.
-  function renderInputBox(px, py) {
+// Input panel (quadruple-click). Draggable; fixed width, auto-growing height (no inner scrollbars).
+function renderInputBox(px, py) {
+  if (!enabled) return;
+  removeInputBox();
+
+  const box = document.createElement('div');
+  box.id = 'scitrue-input';
+  inputBox = box;
+  Object.assign(box.style, {
+    position: 'absolute',
+    top: `${py}px`,
+    left: `${px}px`,
+    width: '520px',          // fixed width
+    minWidth: '380px',
+    height: 'auto',          // let height be content-driven
+    minHeight: '52px',       // baseline height
+    padding: '12px 14px',
+    background: '#111',
+    color: '#fff',
+    border: '1px solid #444',
+    borderRadius: '10px',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+    zIndex: 2147483647,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    cursor: 'move',
+    overflow: 'visible'      // no inner scrollbars
+  });
+
+  const textarea = document.createElement('textarea');
+  textarea.rows = 1;
+  textarea.wrap = 'soft';
+  Object.assign(textarea.style, {
+    flex: '1 1 auto',
+    minWidth: '120px',
+    resize: 'none',          // user cannot resize manually
+    overflowY: 'hidden',     // hide scrollbar; we auto-grow instead
+    overflowX: 'hidden',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    padding: '6px 8px',
+    fontSize: '14px',
+    lineHeight: '20px',
+    border: '1px solid #555',
+    borderRadius: '6px',
+    background: '#fff',
+    color: '#000',
+    cursor: 'text',
+    height: '28px'           // start at one line; JS will override
+  });
+
+  // Auto-grow / shrink the textarea and let the box follow
+  const autosize = () => {
+    textarea.style.height = 'auto';                    // collapse to measure
+    const h = Math.max(28, textarea.scrollHeight);     // grow to full content
+    textarea.style.height = `${h}px`;
+    // box height is content-driven via flex; no explicit setting needed
+  };
+
+  // Grow on any content changes
+  textarea.addEventListener('input', autosize);
+  textarea.addEventListener('change', autosize);
+  textarea.addEventListener('cut',   () => setTimeout(autosize, 0));
+  textarea.addEventListener('paste', () => setTimeout(autosize, 0));
+
+  // Keep Enter from submitting; wrapping still increases height via autosize
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+    }
+  });
+
+  const evalBtn = makeFancyBtn('Evaluate', false);
+  Object.assign(evalBtn.style, { flex: '0 0 auto', cursor: 'pointer' });
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  Object.assign(closeBtn.style, {
+    fontSize: '16px',
+    border: '1px solid #444',
+    borderRadius: '6px',
+    background: '#222',
+    color: '#bbb',
+    cursor: 'pointer',
+    padding: '0 8px',
+    flex: '0 0 auto'
+  });
+
+  evalBtn.onclick = () => {
     if (!enabled) return;
-    removeInputBox();
-
-    const box = document.createElement('div');
-    box.id = 'scitrue-input';
-    inputBox = box;
-    Object.assign(box.style, {
-      position: 'absolute',
-      top: `${py}px`,
-      left: `${px}px`,
-      resize: 'none',
-      overflow: 'visible',
-      width: '520px',
-      minWidth: '380px',
-      height: '52px',
-      padding: '12px 14px',
-      background: '#111',
-      color: '#fff',
-      border: '1px solid #444',
-      borderRadius: '10px',
-      boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
-      zIndex: 2147483647,
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      cursor: 'move'
-    });
-
-    const textarea = document.createElement('textarea');
-    textarea.rows = 1;
-    textarea.wrap = 'soft';
-    Object.assign(textarea.style, {
-      flex: '1 1 auto',
-      minWidth: '120px',
-      height: '28px',
-      resize: 'none',
-      overflowY: 'hidden',
-      overflowX: 'hidden',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-      padding: '2px 8px',
-      fontSize: '14px',
-      lineHeight: '20px',
-      border: '1px solid #555',
-      borderRadius: '6px',
-      background: '#fff',
-      color: '#000',
-      cursor: 'text'
-    });
-    textarea.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
-
-    const evalBtn = makeFancyBtn('Evaluate', false);
-    Object.assign(evalBtn.style, { flex: '0 0 auto', cursor: 'pointer' });
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '×';
-    Object.assign(closeBtn.style, {
-      fontSize: '16px',
-      border: '1px solid #444',
-      borderRadius: '6px',
-      background: '#222',
-      color: '#bbb',
-      cursor: 'pointer',
-      padding: '0 8px',
-      flex: '0 0 auto'
-    });
-
-    evalBtn.onclick = () => {
-      if (!enabled) return;
-      const val = textarea.value.trim();
-      if (!val) { textarea.style.border = '1px solid #ff5555'; textarea.focus(); return; }
-      const r = box.getBoundingClientRect();
-      const pos = { x: r.right + 12 + window.scrollX, y: r.top + window.scrollY };
-      removeInputBox();
-      createJob(val, DEFAULT_K, pos);
-    };
-    closeBtn.onclick = () => removeInputBox();
-
-    box.appendChild(textarea);
-    box.appendChild(evalBtn);
-    box.appendChild(closeBtn);
-    document.body.appendChild(box);
-
-    makeDraggable(box, box, { ignore: (e) => {
-      const t = e.target;
-      return t === textarea || t === evalBtn || t === closeBtn;
-    }});
-
+    const val = textarea.value.trim();
+    if (!val) { textarea.style.border = '1px solid #ff5555'; textarea.focus(); return; }
     const r = box.getBoundingClientRect();
-    if (r.right  > window.innerWidth)  box.style.left = `${window.innerWidth  - r.width  - 12}px`;
-    if (r.bottom > window.innerHeight) box.style.top  = `${window.innerHeight - r.height - 12}px`;
-  }
+    const pos = { x: r.right + 12 + window.scrollX, y: r.top + window.scrollY };
+    removeInputBox();
+    createJob(val, DEFAULT_K, pos);
+  };
+  closeBtn.onclick = () => removeInputBox();
+
+  box.appendChild(textarea);
+  box.appendChild(evalBtn);
+  box.appendChild(closeBtn);
+  document.body.appendChild(box);
+
+  // Drag: ignore interactive children
+  makeDraggable(box, box, { ignore: (e) => {
+    const t = e.target;
+    return t === textarea || t === evalBtn || t === closeBtn;
+  }});
+
+  // Keep the panel within viewport horizontally/vertically on spawn
+  const r = box.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  box.style.left = `${window.innerWidth  - r.width  - 12}px`;
+  if (r.bottom > window.innerHeight) box.style.top  = `${window.innerHeight - r.height - 12}px`;
+
+  // Initial sizing (in case of prefilled content or IME composition)
+  autosize();
+}
+
 
   document.addEventListener('mouseup', () => {
     if (!enabled) { removeActionBtn(); return; }
@@ -850,6 +917,7 @@
     }, 10);
   }, true);
 
+  // Quadruple click: ignore if inside card or input
   document.addEventListener('click', (e) => {
     if (!enabled) return;
     if (e.detail === 4) {
