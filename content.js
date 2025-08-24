@@ -540,6 +540,10 @@ function applyVerdictColor(job) {
                     background:#fff !important;border:1.5px solid ${badgeColor} !important;color:${badgeColor} !important;">
              ${safeTxt(contributionText)}
         </div>
+        <div id="sc_claim_${jobId}_${sc.index ?? 0}"
+            style="font-size:13px;line-height:1.45;font-weight:600;color:#000;white-space:normal;word-break:break-word;overflow:hidden;text-overflow:ellipsis">
+             ${ (claimTxt && String(claimTxt).trim()) ? `${safeTxt(claimTxt)}` : '' }
+        </div>
       </div>
     `;
 
@@ -548,8 +552,7 @@ function applyVerdictColor(job) {
     Object.assign(body.style, { padding:'0 12px 10px', display:'none' }); // default collapsed
 
     const rowsHTML =
-        (claimTxt ? row('Claim', safeTxt(claimTxt)) : '')
-      + (title ? row('Title', safeTxt(title)) : '')
+        (title ? row('Title', safeTxt(title)) : '')
       + (paragraph ? collapsible('Paragraph', `<div>${safeTxt(paragraph)}</div>`) : '')
       + (section ? row('Section', safeTxt(section)) : '')
       + (url ? row('URL', `<a href="${safeU(url)}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.accent};text-decoration:underline">${safeTxt(url)}</a>`) : '')
@@ -594,6 +597,19 @@ function applyVerdictColor(job) {
     container.appendChild(header);
     container.appendChild(body);
     listEl.appendChild(container);
+  }
+
+  function updateClaimText(job, index) {
+    const sc = job.subclaims[index] || {};
+    const claim =
+        (sc.claim || sc.paper_claim || sc.claim_text || sc.subclaim || '').trim();
+    const el = document.getElementById(`sc_claim_${job.id}_${index}`);
+    if (!el) return;
+    el.textContent = claim ? `Claim: ${claim}` : '';
+    }
+
+  function syncAllClaimTexts(job) {
+       for (let i = 0; i < job.subclaims.length; i++) updateClaimText(job, i);
   }
 
   // --- Contribution badge utilities ---
@@ -724,6 +740,7 @@ function applyVerdictColor(job) {
                 if (job.__full) {
                   appendSubclaimCard(job.__full.list, data, job.id);
                   updateContributionBadge(job, index);
+                  updateClaimText(job, index);
                 }
                 setStatus('Adding subclaims');
                 btnDetails.style.display = '';
@@ -737,6 +754,7 @@ function applyVerdictColor(job) {
               const contrib = (data.contribution || data.stance_contribution || '').trim();
               job.subclaims[i] = { ...(job.subclaims[i] || {}), ...data, contribution: contrib };
               updateContributionBadge(job, i);
+              updateClaimText(job, i);
               break;
             }
 
@@ -754,6 +772,7 @@ function applyVerdictColor(job) {
                 setInfoMessage(job, 'completed');
                 btnDetails.style.display = '';
                 syncAllContributionBadges(job);
+                syncAllClaimTexts(job);
               }
               break;
           }
