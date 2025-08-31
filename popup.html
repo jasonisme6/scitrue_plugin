@@ -110,10 +110,47 @@
     </style>
   </head>
   <body>
+    <!-- directly under <body>, before the Enabled row -->
+<div id="authBar" class="row"
+     style="display:none; justify-content:space-between; align-items:center;">
+  <div id="helloUser" class="label">Hi, —</div>
+  <div style="display:flex; gap:6px;">
+    <button id="historyBtn" type="button"
+            style="padding:4px 10px;border-radius:999px;border:1px solid #cfd6e3;background:#fff;cursor:pointer">
+      Show history
+    </button>
+    <button id="logoutBtn" type="button"
+            style="padding:4px 10px;border-radius:999px;border:1px solid #cfd6e3;background:#fff;cursor:pointer">
+      Logout
+    </button>
+  </div>
+</div>
+
+<!-- Login/Register panel (shown when not logged-in) -->
+<div id="authPanel" class="section" style="display:none">
+  <label>Email</label>
+  <input id="authEmail" class="field" type="email"/>
+  <label>Password</label>
+  <input id="authPwd" class="field" type="password"/>
+  <div class="row" style="margin-top:4px">
+    <button id="loginBtn"  type="button"
+            style="padding:8px 12px;border-radius:10px;border:1px solid #cfd6e3;background:#fff;cursor:pointer">
+      Log in
+    </button>
+    <button id="registerBtn" type="button"
+            style="padding:8px 12px;border-radius:10px;border:1px solid #cfd6e3;background:#fff;cursor:pointer">
+      Register
+    </button>
+  </div>
+  <div id="authErr" style="color:#b00020;font-size:12px;margin-top:6px;display:none"></div>
+</div>
+
     <!-- Enabled switch -->
-    <div class="row">
-      <div id="toggle" class="toggle"><div class="knob"></div></div>
-      <div class="label">Enabled</div>
+    <div class="section">
+      <div class="row">
+        <div id="toggle" class="toggle"><div class="knob"></div></div>
+        <div class="label">Enabled</div>
+      </div>
     </div>
 
     <!-- Number of articles (1–15) -->

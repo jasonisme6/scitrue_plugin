@@ -14,40 +14,44 @@
 
   const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
 
-  let settings = { k: 5, relation: 'relevant', mainfinding: false };
+  let settings = { k: 5, relation: 'relevant', mainfinding: false, userEmail: '' };
   chrome.storage.local.get(
-  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true },
+  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true, scitrueUserEmail: '' },
   (res) => {
-    enabled = !!res.scitrueEnabled;
+    enabled = !!res.scitrueEnabled && !!res.scitrueUserEmail;
     settings = {
       k: Math.max(1, Math.min(15, Number(res.scitrueK) || 5)),
       relation: String(res.scitrueRelation || 'relevant'),
       mainfinding: !!res.scitrueMainfinding,
+      userEmail: String(res.scitrueUserEmail || '')
     };
+    if (!enabled) teardownAll();
   }
   );
 
   chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
-  if (changes.scitrueEnabled) {
-    enabled = !!changes.scitrueEnabled.newValue;
+  // enabled now depends on both toggle and userEmail presence
+  if (changes.scitrueEnabled || changes.scitrueUserEmail) {
+    const on = (changes.scitrueEnabled?.newValue ?? enabled) && !!(changes.scitrueUserEmail?.newValue ?? settings.userEmail);
+    enabled = !!on;
     if (!enabled) teardownAll();
   }
-  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding) {
-    const { scitrueK, scitrueRelation, scitrueMainfinding } = {
-      scitrueK: settings.k,
-      scitrueRelation: settings.relation,
-      scitrueMainfinding: settings.mainfinding,
-      ...(changes.scitrueK ? { scitrueK: changes.scitrueK.newValue } : {}),
-      ...(changes.scitrueRelation ? { scitrueRelation: changes.scitrueRelation.newValue } : {}),
-      ...(changes.scitrueMainfinding ? { scitrueMainfinding: changes.scitrueMainfinding.newValue } : {}),
-    };
-    settings = {
-      k: Math.max(1, Math.min(15, Number(scitrueK) || 5)),
-      relation: String(scitrueRelation || 'relevant'),
-      mainfinding: !!scitrueMainfinding,
-    };
+
+  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding || changes.scitrueUserEmail) {
+  const scitrueK           = changes.scitrueK?.newValue ?? settings.k;
+  const scitrueRelation    = changes.scitrueRelation?.newValue ?? settings.relation;
+  const scitrueMainfinding = changes.scitrueMainfinding?.newValue ?? settings.mainfinding;
+  const scitrueUserEmail   = changes.scitrueUserEmail?.newValue ?? settings.userEmail;
+
+  settings = {
+    k: Math.max(1, Math.min(15, Number(scitrueK) || 5)),
+    relation: String(scitrueRelation || 'relevant'),
+    mainfinding: !!scitrueMainfinding,
+    userEmail: String(scitrueUserEmail || '')
+  };
   }
+
   });
 
   // Fixed widths
@@ -82,17 +86,8 @@
   const colorForContribution = (txt) =>
     txt ? (CONTRIBUTION_COLORS[String(txt).toLowerCase()] || null) : null;
 
-  let enabled = true;
+  let enabled = false;
   const jobs = new Map();
-
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.scitrueEnabled) return;
-    enabled = !!changes.scitrueEnabled.newValue;
-    if (!enabled) teardownAll();
-  });
-  chrome.storage.local.get({ scitrueEnabled: true }, (res) => {
-    enabled = !!res.scitrueEnabled;
-  });
 
   let actionBtn = null;
   let inputBox  = null;
@@ -582,8 +577,8 @@ function applyVerdictColor(job) {
              ${safeTxt(contributionText)}
         </div>
         <div id="sc_claim_${jobId}_${sc.index ?? 0}"
-            style="font-size:13px;line-height:1.45;font-weight:600;color:#000;white-space:normal;word-break:break-word;overflow:hidden;text-overflow:ellipsis">
-             ${ (claimTxt && String(claimTxt).trim()) ? `${safeTxt(claimTxt)}` : '' }
+           style="font-size:13px;line-height:1.45;font-weight:600;color:#000;white-space:normal;word-break:break-word;overflow:hidden;text-overflow:ellipsis">
+            ${ (claimTxt && String(claimTxt).trim()) ? safeTxt(claimTxt) : '' }
         </div>
       </div>
     `;
@@ -681,6 +676,7 @@ function applyVerdictColor(job) {
   }
 
   async function runJob(job) {
+    if (!enabled) { return; }
     const { controller } = job;
     const { statusDot, statusText, btnDetails } = job.elements;
 
@@ -693,7 +689,7 @@ function applyVerdictColor(job) {
       const res = await fetch(API_STREAM_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, }),
+        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, userEmail: settings.userEmail}),
         signal: controller.signal
       });
 
@@ -729,6 +725,9 @@ function applyVerdictColor(job) {
                 btnDetails.style.display = '';
               } else if (/Collecting evidence/i.test(m)) {
                 setInfoMessage(job, 'fetching');
+              } else if (/Using cached result/i.test(m)) {
+                setInfoMessage(job, 'summary');
+                btnDetails.style.display = '';
               }
               break;
             }
