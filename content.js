@@ -13,7 +13,42 @@
   'use strict';
 
   const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
-  const DEFAULT_K = 5;
+
+  let settings = { k: 5, relation: 'relevant', mainfinding: false };
+  chrome.storage.local.get(
+  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true },
+  (res) => {
+    enabled = !!res.scitrueEnabled;
+    settings = {
+      k: Math.max(1, Math.min(15, Number(res.scitrueK) || 5)),
+      relation: String(res.scitrueRelation || 'relevant'),
+      mainfinding: !!res.scitrueMainfinding,
+    };
+  }
+  );
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes.scitrueEnabled) {
+    enabled = !!changes.scitrueEnabled.newValue;
+    if (!enabled) teardownAll();
+  }
+  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding) {
+    const { scitrueK, scitrueRelation, scitrueMainfinding } = {
+      scitrueK: settings.k,
+      scitrueRelation: settings.relation,
+      scitrueMainfinding: settings.mainfinding,
+      ...(changes.scitrueK ? { scitrueK: changes.scitrueK.newValue } : {}),
+      ...(changes.scitrueRelation ? { scitrueRelation: changes.scitrueRelation.newValue } : {}),
+      ...(changes.scitrueMainfinding ? { scitrueMainfinding: changes.scitrueMainfinding.newValue } : {}),
+    };
+    settings = {
+      k: Math.max(1, Math.min(15, Number(scitrueK) || 5)),
+      relation: String(scitrueRelation || 'relevant'),
+      mainfinding: !!scitrueMainfinding,
+    };
+  }
+  });
 
   // Fixed widths
   const COLLAPSED_WIDTH_CSS = 'clamp(320px, 26vw, 520px)';
@@ -132,7 +167,7 @@
   }
 
   let jobSeq = 0;
-  function createJob(claimText, k = DEFAULT_K, pos = null) {
+  function createJob(claimText, k = settings.k, pos = null) {
     const id = `job_${Date.now()}_${++jobSeq}`;
     const controller = new AbortController();
     const job = {
@@ -142,7 +177,7 @@
       overallText: '',
       verdictColor: '',
       subclaims: [],
-      articlesCount: DEFAULT_K,
+      articlesCount: settings.k,
       infoMessage: '',
       elements: {},
       __details: null,
@@ -234,7 +269,10 @@
       background: 'transparent',
       display: 'block'
     });
-    infoBar.textContent = `The process usually takes between 15 and 33 seconds for ${job.k || DEFAULT_K} papers.`;
+    const k = job.k || settings.k;
+    const minSec = 3 * k;
+    const maxSec = 5 * k + 8;
+    infoBar.textContent = `The process usually takes between ${minSec} and ${maxSec} seconds for ${k} papers.`;
     job.infoMessage = infoBar.textContent;
     card.appendChild(infoBar);
 
@@ -291,7 +329,10 @@
     let msg = job.infoMessage || '';
     switch (kind) {
       case 'fetching':
-        msg = `The process usually takes between 15 and 33 seconds for ${job.k || DEFAULT_K} papers.`; break;
+        const k = job.k || settings.k;
+        const minSec = 3 * k;
+        const maxSec = 5 * k + 8;
+        msg = `The process usually takes between ${minSec} and ${maxSec} seconds for ${k} papers.`; break;
       case 'summary':
         msg = 'Evidence collection has finished. You may click "Show Details" to view.'; break;
       case 'completed':
@@ -652,7 +693,7 @@ function applyVerdictColor(job) {
       const res = await fetch(API_STREAM_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim: job.claimText, k: job.k }),
+        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, }),
         signal: controller.signal
       });
 
@@ -823,7 +864,7 @@ function applyVerdictColor(job) {
       const pos = { x, y };
       removeActionBtn();
       try { window.getSelection().removeAllRanges(); } catch {}
-      createJob(selectedText, DEFAULT_K, pos);
+      createJob(selectedText, settings.k, pos);
     };
     document.body.appendChild(btn);
   }
@@ -916,7 +957,7 @@ function applyVerdictColor(job) {
       const r = box.getBoundingClientRect();
       const pos = { x: r.right + 12 + window.scrollX, y: r.top + window.scrollY };
       removeInputBox();
-      createJob(val, DEFAULT_K, pos);
+      createJob(val, settings.k, pos);
     };
     closeBtn.onclick = () => removeInputBox();
 

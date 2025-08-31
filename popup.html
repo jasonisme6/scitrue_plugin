@@ -3,20 +3,160 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      body { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 12px 16px; }
-      .row { display:flex; align-items:center; gap:10px; }
-      .toggle { width:42px; height:24px; background:#ddd; border-radius:999px; position:relative; cursor:pointer; }
-      .knob { position:absolute; top:2px; left:2px; width:20px; height:20px; background:white; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s; }
-      .on { background:#3b82f6; }
-      .on .knob { left:20px; }
-      .label { user-select:none; }
+      /* Wider popup so long text fits on one line */
+      body {
+        font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        margin: 12px 16px;
+        min-width: 640px;
+      }
+
+      /* Top toggle row */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .label { user-select: none; }
+
+      /* Vertical sections */
+      .section { display: block; margin-bottom: 12px; }
+      .section label { display: block; margin: 8px 0 4px; }
+
+      /* Inputs */
+      .field {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d8dbe2;
+        border-radius: 12px;
+        background: #f6f7fb;
+        box-sizing: border-box;
+        white-space: nowrap; /* keep selected option on one line */
+      }
+
+      /* Checkbox row: only the box is clickable */
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 22px;
+      }
+
+      .checkbox-text {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        user-select: none;
+        cursor: pointer;
+      }
+
+      /* Toggle switch */
+      .toggle {
+        width: 42px; height: 24px;
+        background: #ddd;
+        border-radius: 999px;
+        position: relative;
+        cursor: pointer;
+      }
+      .knob {
+        position: absolute; top: 2px; left: 2px;
+        width: 20px; height: 20px;
+        background: #fff;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,.25);
+        transition: left .15s;
+      }
+      .on { background: #3b82f6; }
+      .on .knob { left: 20px; }
+
+      /* Help bubble (circle) + CSS tooltip (single line) */
+      .help {
+        position: relative;
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        background: #e9eef6;
+        border: 1.5px solid #cfd6e3;
+        color: #41536e;
+        font-weight: 700;
+        font-size: 10px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+        transform: translateY(3px);
+      }
+      .help::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: 50%;
+        transform: translateX(-40%);
+        bottom: calc(100% + 10px);
+        background: #fff;
+        color: #111;
+        border: 1px solid #d0d6e0;
+        border-radius: 10px;
+        padding: 8px 10px;
+        box-shadow: 0 6px 22px rgba(0,0,0,.12);
+        font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        white-space: nowrap;          /* single line */
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+        z-index: 9999;
+      }
+      .help:hover::after { opacity: 1; }
     </style>
   </head>
   <body>
+    <!-- Enabled switch -->
     <div class="row">
       <div id="toggle" class="toggle"><div class="knob"></div></div>
       <div class="label">Enabled</div>
     </div>
+
+    <!-- Number of articles (1–15) -->
+    <div class="section">
+      <label for="kInput">Enter a number of articles to be considered (1 to 15):</label>
+      <input id="kInput" class="field" type="number" min="1" max="15" value="5" />
+    </div>
+
+    <!-- Relevance (always show full long labels) -->
+    <div class="section">
+      <label for="relationSelect">Filter articles by how closely they relate to your claim:</label>
+      <select id="relationSelect" class="field">
+        <option value="relevant">
+          Relevant (default) — Includes all evidence related to this claim.
+        </option>
+        <option value="mostly_relevant">
+          Mostly Relevant — Shows articles with a stronger connection to the claim.
+        </option>
+        <option value="highly_relevant">
+          Highly Relevant — Shows only articles that are directly and strongly linked to this claim.
+        </option>
+      </select>
+    </div>
+
+    <!-- Main findings: only the checkbox toggles -->
+<div class="section">
+  <div class="checkbox-row">
+<label for="mainfindingChk" style="display:inline-flex;align-items:center;gap:6px;">
+  <input id="mainfindingChk" type="checkbox" />
+  <span>Restrict to main findings only?</span>
+</label>
+
+<button
+  type="button"
+  class="help"
+  style="display:inline-flex;align-items:center;justify-content:center;margin:0;vertical-align:middle;"
+  aria-label="Help: main findings only"
+  data-tip="If checked, only articles where information is tagged as 'main findings' will be considered."
+>?</button>
+  </div>
+</div>
+
+
     <script src="popup.js"></script>
   </body>
 </html>
