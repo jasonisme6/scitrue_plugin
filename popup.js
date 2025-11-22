@@ -3,6 +3,7 @@ const toggle         = document.getElementById('toggle');
 const kInput         = document.getElementById('kInput');
 const relationSelect = document.getElementById('relationSelect');
 const mainfindingChk = document.getElementById('mainfindingChk');
+const yearSelect     = document.getElementById('yearSelect');
 
 // NEW DOM
 const authBar    = document.getElementById('authBar');
@@ -25,25 +26,29 @@ async function getSettings() {
     scitrueK = 5,
     scitrueRelation = 'relevant',
     scitrueMainfinding = false,
-    scitrueUserEmail = ''
+    scitrueUserEmail = '',
+    scitrueYear = 'All Years'
   } = await chrome.storage.local.get({
     scitrueK: 5,
     scitrueRelation: 'relevant',
     scitrueMainfinding: false,
-    scitrueUserEmail: ''
+    scitrueUserEmail: '',
+    scitrueYear: 'All Years'
   });
   return {
     scitrueK: clampK(scitrueK),
     scitrueRelation,
     scitrueMainfinding: !!scitrueMainfinding,
-    scitrueUserEmail: String(scitrueUserEmail || '')
+    scitrueUserEmail: String(scitrueUserEmail || ''),
+    scitrueYear
   };
 }
-async function setSettings({ scitrueK, scitrueRelation, scitrueMainfinding }) {
+async function setSettings({ scitrueK, scitrueRelation, scitrueMainfinding, scitrueYear }) {
   await chrome.storage.local.set({
     scitrueK: clampK(scitrueK),
     scitrueRelation,
-    scitrueMainfinding: !!scitrueMainfinding
+    scitrueMainfinding: !!scitrueMainfinding,
+    scitrueYear
   });
 }
 async function getEnabled() {
@@ -51,7 +56,7 @@ async function getEnabled() {
   return !!scitrueEnabled;
 }
 async function setEnabled(on) { await chrome.storage.local.set({ scitrueEnabled: !!on }); }
-const toggleChk = document.getElementById('toggleChk'); // 开关里的实际 <input type="checkbox">
+const toggleChk = document.getElementById('toggleChk');
 function renderEnabled(on) {
    toggle.classList.toggle('on', !!on);
    if (toggleChk) toggleChk.checked = !!on;
@@ -93,6 +98,26 @@ function showSettings(email) {
     showSettings(s.scitrueUserEmail);
   }
 
+
+  if (yearSelect) {
+    const currentYear = new Date().getFullYear();
+    yearSelect.innerHTML = '';
+
+    const optAll = document.createElement('option');
+    optAll.value = 'All Years';
+    optAll.textContent = 'All Years';
+    yearSelect.appendChild(optAll);
+
+    for (let y = currentYear; y > 1900; y--) {
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      yearSelect.appendChild(opt);
+    }
+
+    yearSelect.value = s.scitrueYear;
+  }
+
   // seed fields
   kInput.value = String(s.scitrueK);
   relationSelect.value = s.scitrueRelation;
@@ -102,7 +127,8 @@ function showSettings(email) {
   const persistAll = () => setSettings({
     scitrueK: kInput.value,
     scitrueRelation: relationSelect.value,
-    scitrueMainfinding: mainfindingChk.checked
+    scitrueMainfinding: mainfindingChk.checked,
+    scitrueYear: yearSelect.value
   });
   kInput.addEventListener('input', () => {
     const v = clampK(kInput.value);
@@ -112,6 +138,7 @@ function showSettings(email) {
   kInput.addEventListener('blur',   persistAll);
   relationSelect.addEventListener('change', persistAll);
   mainfindingChk.addEventListener('change', persistAll);
+  if (yearSelect) yearSelect.addEventListener('change', persistAll);
 
   // Toggle enable only when logged in
   toggle.addEventListener('click', async () => {
@@ -160,7 +187,7 @@ function showSettings(email) {
 
   registerBtn.addEventListener('click', () => {
     // open verify page in a new window
-    window.open('http://localhost:8501/?page=verify', '_blank', 'noopener');
+    window.open('http://localhost:8501/', '_blank', 'noopener');
   });
 
   logoutBtn.addEventListener('click', async () => {
@@ -171,8 +198,7 @@ function showSettings(email) {
   });
 
   historyBtn.addEventListener('click', async () => {
-    const { scitrueUserEmail = '' } = await chrome.storage.local.get({ scitrueUserEmail: '' });
-    const url = `http://localhost:8501/?page=history&userEmail=${encodeURIComponent(scitrueUserEmail)}`;
+    const url = `http://localhost:8501/`;
     window.open(url, '_blank', 'noopener');
   });
 })();

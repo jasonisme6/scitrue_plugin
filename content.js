@@ -14,16 +14,17 @@
 
   const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
 
-  let settings = { k: 5, relation: 'relevant', mainfinding: false, userEmail: '' };
+  let settings = { k: 5, relation: 'relevant', mainfinding: false, userEmail: '', year: 'All Years' };
   chrome.storage.local.get(
-  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true, scitrueUserEmail: '' },
+  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true, scitrueUserEmail: '', scitrueYear: 'All Years' },
   (res) => {
     enabled = !!res.scitrueEnabled && !!res.scitrueUserEmail;
     settings = {
       k: Math.max(1, Math.min(15, Number(res.scitrueK) || 5)),
       relation: String(res.scitrueRelation || 'relevant'),
       mainfinding: !!res.scitrueMainfinding,
-      userEmail: String(res.scitrueUserEmail || '')
+      userEmail: String(res.scitrueUserEmail || ''),
+      year: String(res.scitrueYear || 'All Years')
     };
     if (!enabled) teardownAll();
   }
@@ -38,17 +39,18 @@
     if (!enabled) teardownAll();
   }
 
-  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding || changes.scitrueUserEmail) {
+  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding || changes.scitrueUserEmail || changes.scitrueYear) {
   const scitrueK           = changes.scitrueK?.newValue ?? settings.k;
   const scitrueRelation    = changes.scitrueRelation?.newValue ?? settings.relation;
   const scitrueMainfinding = changes.scitrueMainfinding?.newValue ?? settings.mainfinding;
   const scitrueUserEmail   = changes.scitrueUserEmail?.newValue ?? settings.userEmail;
-
+  const scitrueYear        = changes.scitrueYear?.newValue ?? settings.year;
   settings = {
     k: Math.max(1, Math.min(15, Number(scitrueK) || 5)),
     relation: String(scitrueRelation || 'relevant'),
     mainfinding: !!scitrueMainfinding,
-    userEmail: String(scitrueUserEmail || '')
+    userEmail: String(scitrueUserEmail || ''),
+    year: String(scitrueYear || 'All Years')
   };
   }
 
@@ -70,18 +72,15 @@
   };
 
   const SUBCLAIM_BG_COLORS = [
-    '#F7B7B7', '#E6E6FA', '#FFEFD5', '#F0FFFF', '#FFFAFA',
-    '#FFF0F5', '#F5F5DC', '#FFE4C4', '#E0FFFF'
+        '#E6E6FA', '#FFEFD5', '#F0FFFF', '#F7B7B7', '#E0FFE0',
+        '#FFF0F5', '#F5F5DC', '#FFE4C4', '#E0FFFF', '#FFFACD'
   ];
 
   const CONTRIBUTION_COLORS = {
-    'corroborating': '#1F4307',
-    'partially corroborating': '#34740A',
-    'slightly corroborating': '#42930D',
-    'contrasting': '#931C0D',
-    'partially contrasting': '#CB4231',
-    'slightly contrasting': '#E15F50',
-    'inconclusive': 'black'
+        'completely supports': '#32CD32',
+        'conditionally supports': '#9ACD32',
+        'completely refutes': '#931C0D',
+        'conditionally refutes': '#F08080',
   };
   const colorForContribution = (txt) =>
     txt ? (CONTRIBUTION_COLORS[String(txt).toLowerCase()] || null) : null;
@@ -334,6 +333,10 @@
         msg = 'Your process has fully completed. Click "Show Details" to see the report.'; break;
       case 'invalid':
         msg = 'Your claim is not a valid scientific claim. Please try a different claim.'; break;
+      case 'credit':
+        msg = 'User reached the maximum credits.'; break;
+      case 'exception':
+        msg = 'Something is wrong with the system, please contact the developers for support.'; break;
       default: break;
     }
     job.infoMessage = msg;
@@ -346,31 +349,133 @@
     if (!raw) return '';
     const parser = new DOMParser();
     const doc = parser.parseFromString(String(raw), 'text/html');
+
+    const ALLOWED_TAGS = new Set([
+      'A', 'SPAN', 'STRONG', 'EM', 'B', 'I', 'U', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI'
+    ]);
+
     (function walk(node) {
       const kids = Array.from(node.childNodes);
       for (const child of kids) {
         if (child.nodeType === Node.ELEMENT_NODE) {
-          if (child.tagName !== 'A') {
-            child.replaceWith(document.createTextNode(child.textContent || ''));
+          const tag = child.tagName.toUpperCase();
+
+          if (!ALLOWED_TAGS.has(tag)) {
+            while (child.firstChild) {
+              node.insertBefore(child.firstChild, child);
+            }
+            node.removeChild(child);
             continue;
           }
-          const href = child.getAttribute('href') || '';
-          let ok = false, urlStr = '#';
-          try {
-            const u = new URL(href, location.href);
-            if (/^https?:/i.test(u.protocol)) { ok = true; urlStr = u.toString(); }
-          } catch {}
-          if (!ok) { child.replaceWith(document.createTextNode(child.textContent || '')); continue; }
-          child.setAttribute('href', urlStr);
-          child.setAttribute('target', '_blank');
-          child.setAttribute('rel', 'noopener noreferrer');
-          child.style.color = PALETTE.accent;
-          child.style.textDecoration = 'underline';
+
+          for (const attr of Array.from(child.attributes)) {
+            const name = attr.name.toLowerCase();
+            if (name.startsWith('on')) {
+              child.removeAttribute(attr.name);
+            }
+          }
+
+          if (tag === 'A') {
+            const href = child.getAttribute('href') || '';
+            let ok = false, urlStr = '#';
+            try {
+              const u = new URL(href, location.href);
+              if (/^https?:/i.test(u.protocol)) { ok = true; urlStr = u.toString(); }
+            } catch {}
+            if (!ok) {
+              child.replaceWith(document.createTextNode(child.textContent || ''));
+              continue;
+            }
+            child.setAttribute('href', urlStr);
+            child.setAttribute('target', '_blank');
+            child.setAttribute('rel', 'noopener noreferrer');
+            child.style.color = PALETTE.accent;
+            child.style.textDecoration = 'underline';
+          }
+
+          walk(child);
         }
       }
     })(doc.body);
+
     return doc.body.innerHTML;
   }
+
+function ensureSubclaimVisible(job, index) {
+  if (!job.__full) {
+    toggleDetails(job);
+  }
+  if (!job.__full || !job.__full.list) return;
+
+  const listEl = job.__full.list;
+  const cards = Array.from(listEl.children);
+  if (!cards.length || index < 0 || index >= cards.length) return;
+
+  let targetCard = null;
+
+  cards.forEach((card, i) => {
+    const header = card.firstElementChild;
+    const body   = card.lastElementChild;
+    if (!header || !body) return;
+
+    const isOpen = body.style.display !== 'none';
+
+    if (i === index) {
+      targetCard = card;
+      if (!isOpen) {
+        header.click();
+      }
+    } else {
+      if (isOpen) {
+        header.click();
+      }
+    }
+  });
+
+  if (!targetCard) return;
+
+  const details = job.__details;
+  if (details) {
+    const offsetTop = targetCard.offsetTop;
+    details.scrollTo({
+      top: Math.max(offsetTop - 12, 0),
+      behavior: 'smooth'
+    });
+  } else {
+    const rect = targetCard.getBoundingClientRect();
+    window.scrollTo({
+      top: window.scrollY + rect.top - 80,
+      behavior: 'smooth'
+    });
+  }
+
+  targetCard.style.outline = '2px solid #ff9800';
+  setTimeout(() => {
+    targetCard.style.outline = '';
+  }, 1200);
+}
+
+
+  function wireSummaryClicks(job) {
+    if (!job.__full || !job.__full.summary) return;
+    const root = job.__full.summary;
+    const chunks = root.querySelectorAll('.summary-chunk[data-idx]');
+    if (!chunks.length) return;
+
+    chunks.forEach((el) => {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const idxStr = el.getAttribute('data-idx');
+        const idx = idxStr ? parseInt(idxStr, 10) : NaN;
+        if (!Number.isFinite(idx)) return;
+        ensureSubclaimVisible(job, idx);
+      });
+    });
+  }
+
+
 
 function applyVerdictColor(job) {
   const c = job.verdictColor || '#000000';
@@ -442,17 +547,22 @@ function applyVerdictColor(job) {
         verdictSection: details.querySelector(`#${job.id}_verdict_section`),
         verdictHeading: details.querySelector(`#${job.id}_verdict_heading`),
       };
-      if (job.summaryHTML)  el.summary.innerHTML = job.summaryHTML;
+
+      job.__full = el;
+
+      if (job.summaryHTML) {
+        el.summary.innerHTML = job.summaryHTML;
+        wireSummaryClicks(job);
+      }
       if (job.overallText)  el.overall.textContent = job.overallText;
       if (job.subclaims.length) {
         for (const sc of job.subclaims) appendSubclaimCard(el.list, sc, job.id);
-        syncAllContributionBadges(job);
       }
 
-      job.__full = el;
       job.expanded = true;
       btnDetails.textContent = 'Hide Details';
       applyVerdictColor(job);
+
       const current = card.getBoundingClientRect();
       const targetH = Math.min(Math.max(current.height, 260), Math.floor(window.innerHeight * 0.45));
       card.style.height = `${targetH}px`;
@@ -529,18 +639,21 @@ function applyVerdictColor(job) {
     };
 
     const title      = pick(sc, ['title']);
-    const claimTxt   = pick(sc, ['paper_claim', 'paper_claim_text', 'claim', 'claim_text', 'subclaim']);
     const paragraph  = pick(sc, ['paragraph']);
-    const section    = pick(sc, ['section','paper_section','context_section']);
-    const abstract   = pick(sc, ['abstract']);
+    const section    = pick(sc, ['section']);
     const url        = pick(sc, ['url']);
+    const abstract   = pick(sc, ['abstract']);
+    const venue      = pick(sc, ['venue']);
     const year       = pick(sc, ['year']);
+    const citationCount = pick(sc, ['citationCount']);
     const relSent    = pick(sc, ['relevant_sentence','relevant sentence']);
     const label      = pick(sc, ['label']);
     const contributionText = pick(sc, ['contribution','stance_contribution'], '');
     const suppAss    = pick(sc, ['supporting assumptions']);
     const refuAss    = pick(sc, ['refuting assumptions']);
     const sjrObj     = sc.sjr;
+    const openAccessPdf = pick(sc, ['openAccessPdf']);
+    const fieldsOfStudy = pick(sc, ['fieldsOfStudy']);
     const relType    = pick(sc, ['relevant sentence type']);
     const funcReason = pick(sc, ['function_reason']);
     const relation   = pick(sc, ['relation']);
@@ -574,11 +687,7 @@ function applyVerdictColor(job) {
              style="display:${contributionText ? 'inline-block' : 'none'};
                     font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600;
                     background:#fff !important;border:1.5px solid ${badgeColor} !important;color:${badgeColor} !important;">
-             ${safeTxt(contributionText)}
-        </div>
-        <div id="sc_claim_${jobId}_${sc.index ?? 0}"
-           style="font-size:13px;line-height:1.45;font-weight:600;color:#000;white-space:normal;word-break:break-word;overflow:hidden;text-overflow:ellipsis">
-            ${ (claimTxt && String(claimTxt).trim()) ? safeTxt(claimTxt) : '' }
+             ${safeTxt(contributionText) + " to the given claim"}
         </div>
       </div>
     `;
@@ -593,12 +702,16 @@ function applyVerdictColor(job) {
       + (section ? row('Section', safeTxt(section)) : '')
       + (url ? row('URL', `<a href="${safeU(url)}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.accent};text-decoration:underline">${safeTxt(url)}</a>`) : '')
       + (abstract ? collapsible('Abstract', `<div>${safeTxt(abstract)}</div>`) : '')
+      + (venue ? row('Venue', safeTxt(venue)) : '')
       + (year ? row('Year', safeTxt(year)) : '')
+      + (citationCount ? row('Citation Count', safeTxt(citationCount)) : '')
       + (relSent ? row('Relevant Sentence', safeTxt(relSent)) : '')
       + (label ? row('Label', safeTxt(label)) : '')
       + (suppAss ? collapsible('Supporting Assumptions', listify(suppAss)) : '')
       + (refuAss ? collapsible('Refuting Assumptions', listify(refuAss)) : '')
       + renderSjr(sjrObj)
+      + (openAccessPdf ? row('Open Access', `<a href="${safeU(openAccessPdf)}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.accent};text-decoration:underline">${safeTxt(openAccessPdf)}</a>`) : '')
+      + (fieldsOfStudy ? row('Field of Study', safeTxt(fieldsOfStudy)) : '')
       + ((relType || funcReason)
           ? collapsible('Context', `<div>The source is highly likely contributing <strong>${safeTxt(relType||'—')}</strong> of the study. ${safeTxt(funcReason||'')}</div>`)
           : '')
@@ -670,18 +783,10 @@ function applyVerdictColor(job) {
     if (badge) applyContributionBadgeStyles(badge, contrib);
   }
 
-  function syncAllContributionBadges(job) {
-    if (!job.__full) return;
-    for (let i = 0; i < job.subclaims.length; i++) updateContributionBadge(job, i);
-  }
-
   async function runJob(job) {
     if (!enabled) { return; }
     const { controller } = job;
     const { statusDot, statusText, btnDetails } = job.elements;
-
-    let errored = false;
-    let invalid = false;
 
     setStatus('Analyzing');
 
@@ -689,7 +794,7 @@ function applyVerdictColor(job) {
       const res = await fetch(API_STREAM_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, userEmail: settings.userEmail}),
+        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, userEmail: settings.userEmail, year: settings.year}),
         signal: controller.signal
       });
 
@@ -712,7 +817,7 @@ function applyVerdictColor(job) {
 
           let msg = null;
           try { msg = JSON.parse(line); } catch {}
-          if (!msg || invalid) continue;
+          if (!msg) continue;
 
           switch (msg.type) {
             case 'status': {
@@ -742,7 +847,10 @@ function applyVerdictColor(job) {
             case 'summary': {
               const html = sanitizeSummaryHTML(msg.html || '');
               job.summaryHTML = html;
-              if (job.__full) job.__full.summary.innerHTML = html || '';
+              if (job.__full) {
+                job.__full.summary.innerHTML = html || '';
+                wireSummaryClicks(job);
+              }
               setStatus('Generating summary');
               setInfoMessage(job, 'summary');
               btnDetails.style.display = '';
@@ -752,7 +860,10 @@ function applyVerdictColor(job) {
             case 'summary_chunk': {
               const chunk = sanitizeSummaryHTML(msg.html || '') + ' ';
               job.summaryHTML += chunk;
-              if (job.__full) job.__full.summary.innerHTML = job.summaryHTML;
+              if (job.__full) {
+                job.__full.summary.innerHTML = job.summaryHTML;
+                wireSummaryClicks(job);
+              }
               setStatus('Generating summary');
               setInfoMessage(job, 'summary');
               btnDetails.style.display = '';
@@ -789,45 +900,63 @@ function applyVerdictColor(job) {
             }
 
             case 'subclaim_update': {
-              const i = msg.index ?? 0;
-              const data = msg.data || {};
-              const contrib = (data.contribution || data.stance_contribution || '').trim();
-              job.subclaims[i] = { ...(job.subclaims[i] || {}), ...data, contribution: contrib };
-              updateContributionBadge(job, i);
-              updateClaimText(job, i);
               break;
             }
 
-            case 'error':
-              errored = true;
-              console.log(msg);
-              markInvalid();
-              invalid = true;
+            case 'no_credit':
+              markNoCredit();
               break;
+
+            case 'invalid_claim':
+              markInvalidClaim();
+              break;
+
+            case 'system_exception':
+              markException();
+              break;
+
             case 'done':
-              if (!invalid && !errored) {
-                job.status = 'done';
-                statusDot.style.background = '#2ecc71';
-                setStatus('Completed');
-                setInfoMessage(job, 'completed');
-                btnDetails.style.display = '';
-                syncAllContributionBadges(job);
-                syncAllClaimTexts(job);
-              }
+              job.status = 'done';
+              statusDot.style.background = '#2ecc71';
+              setStatus('Completed');
+              setInfoMessage(job, 'completed');
+              btnDetails.style.display = '';
               break;
           }
         }
       }
     } catch {
-      if (job.status !== 'canceled') { markInvalid(); }
+      if (job.status !== 'canceled') { markException(); }
     }
 
     function setStatus(t){ job.elements.statusText.textContent = t; }
-    function markInvalid() {
+    function markInvalidClaim() {
       job.status = 'error';
       job.elements.statusDot.style.background = '#e74c3c';
       setStatus('Invalid Claim');
       setInfoMessage(job, 'invalid');
+      if (job.elements.btnDetails) {
+        job.elements.btnDetails.style.display = 'none';
+        job.elements.btnDetails.onclick = null;
+      }
+    }
+
+    function markException() {
+      job.status = 'error';
+      job.elements.statusDot.style.background = '#e74c3c';
+      setStatus('System Error');
+      setInfoMessage(job, 'exception');
+      if (job.elements.btnDetails) {
+        job.elements.btnDetails.style.display = 'none';
+        job.elements.btnDetails.onclick = null;
+      }
+    }
+
+    function markNoCredit() {
+      job.status = 'error';
+      job.elements.statusDot.style.background = '#e74c3c';
+      setStatus('No Credit');
+      setInfoMessage(job, 'credit');
       if (job.elements.btnDetails) {
         job.elements.btnDetails.style.display = 'none';
         job.elements.btnDetails.onclick = null;
