@@ -187,7 +187,7 @@ function showSettings(email) {
 
   registerBtn.addEventListener('click', () => {
     // open verify page in a new window
-    window.open('https://www.scitrue.org/', '_blank', 'noopener');
+    window.open('https://www.scitrue.org/platform', '_blank', 'noopener');
   });
 
   logoutBtn.addEventListener('click', async () => {
@@ -198,7 +198,7 @@ function showSettings(email) {
   });
 
   historyBtn.addEventListener('click', async () => {
-    const url = `https://www.scitrue.org/`;
+    const url = `https://www.scitrue.org/platform`;
     window.open(url, '_blank', 'noopener');
   });
 })();
