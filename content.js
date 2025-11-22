@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const API_STREAM_URL = 'http://localhost:5002/api/analyze_claim_stream';
+  const API_STREAM_URL = 'https://www.scitrue.org/api/analyze_claim_stream';
 
   let settings = { k: 5, relation: 'relevant', mainfinding: false, userEmail: '', year: 'All Years' };
   chrome.storage.local.get(

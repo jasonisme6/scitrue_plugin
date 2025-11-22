@@ -150,7 +150,7 @@ function showSettings(email) {
   });
 
   // ===== Auth handlers =====
-  const API_LOGIN_URL = 'http://localhost:5002/api/login';
+  const API_LOGIN_URL = 'https://www.scitrue.org/api/login';
 
   function showAuthError(msg) {
     authErr.textContent = msg || '';
@@ -187,7 +187,7 @@ function showSettings(email) {
 
   registerBtn.addEventListener('click', () => {
     // open verify page in a new window
-    window.open('http://localhost:8501/', '_blank', 'noopener');
+    window.open('https://www.scitrue.org/', '_blank', 'noopener');
   });
 
   logoutBtn.addEventListener('click', async () => {
@@ -198,7 +198,7 @@ function showSettings(email) {
   });
 
   historyBtn.addEventListener('click', async () => {
-    const url = `http://localhost:8501/`;
+    const url = `https://www.scitrue.org/`;
     window.open(url, '_blank', 'noopener');
   });
 })();
