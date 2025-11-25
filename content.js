@@ -14,9 +14,9 @@
 
   const API_STREAM_URL = 'https://www.scitrue.org/api/analyze_claim_stream';
 
-  let settings = { k: 5, relation: 'relevant', mainfinding: false, userEmail: '', year: 'All Years' };
+  let settings = { k: 5, relation: 'relevant', mainfinding: false, userEmail: '', userPassword: '', year: 'All Years' };
   chrome.storage.local.get(
-  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true, scitrueUserEmail: '', scitrueYear: 'All Years' },
+  { scitrueK: 5, scitrueRelation: 'relevant', scitrueMainfinding: false, scitrueEnabled: true, scitrueUserEmail: '', scitruePassword: '', scitrueYear: 'All Years' },
   (res) => {
     enabled = !!res.scitrueEnabled && !!res.scitrueUserEmail;
     settings = {
@@ -24,6 +24,7 @@
       relation: String(res.scitrueRelation || 'relevant'),
       mainfinding: !!res.scitrueMainfinding,
       userEmail: String(res.scitrueUserEmail || ''),
+      userPassword: String(res.scitruePassword || ''),
       year: String(res.scitrueYear || 'All Years')
     };
     if (!enabled) teardownAll();
@@ -39,17 +40,19 @@
     if (!enabled) teardownAll();
   }
 
-  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding || changes.scitrueUserEmail || changes.scitrueYear) {
+  if (changes.scitrueK || changes.scitrueRelation || changes.scitrueMainfinding || changes.scitrueUserEmail || changes.scitruePassword || changes.scitrueYear) {
   const scitrueK           = changes.scitrueK?.newValue ?? settings.k;
   const scitrueRelation    = changes.scitrueRelation?.newValue ?? settings.relation;
   const scitrueMainfinding = changes.scitrueMainfinding?.newValue ?? settings.mainfinding;
   const scitrueUserEmail   = changes.scitrueUserEmail?.newValue ?? settings.userEmail;
+  const scitruePassword    = changes.scitruePassword?.newValue ?? settings.userPassword;
   const scitrueYear        = changes.scitrueYear?.newValue ?? settings.year;
   settings = {
     k: Math.max(1, Math.min(15, Number(scitrueK) || 5)),
     relation: String(scitrueRelation || 'relevant'),
     mainfinding: !!scitrueMainfinding,
     userEmail: String(scitrueUserEmail || ''),
+    userPassword: String(scitruePassword || ''),
     year: String(scitrueYear || 'All Years')
   };
   }
@@ -335,6 +338,8 @@
         msg = 'Your claim is not a valid scientific claim. Please try a different claim.'; break;
       case 'credit':
         msg = 'User reached the maximum credits.'; break;
+      case 'auth':
+        msg = 'User authentication failed, please login again.'; break;
       case 'exception':
         msg = 'Something is wrong with the system, please contact the developers for support.'; break;
       default: break;
@@ -794,7 +799,7 @@ function applyVerdictColor(job) {
       const res = await fetch(API_STREAM_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, userEmail: settings.userEmail, year: settings.year}),
+        body: JSON.stringify({ claim: job.claimText, k: job.k, relation: settings.relation, mainfinding: settings.mainfinding, userEmail: settings.userEmail, userPassword: settings.userPassword, year: settings.year}),
         signal: controller.signal
       });
 
@@ -907,6 +912,10 @@ function applyVerdictColor(job) {
               markNoCredit();
               break;
 
+            case 'auth_failed':
+              markAuthFailed();
+              break;
+
             case 'invalid_claim':
               markInvalidClaim();
               break;
@@ -957,6 +966,17 @@ function applyVerdictColor(job) {
       job.elements.statusDot.style.background = '#e74c3c';
       setStatus('No Credit');
       setInfoMessage(job, 'credit');
+      if (job.elements.btnDetails) {
+        job.elements.btnDetails.style.display = 'none';
+        job.elements.btnDetails.onclick = null;
+      }
+    }
+
+    function markAuthFailed() {
+      job.status = 'error';
+      job.elements.statusDot.style.background = '#e74c3c';
+      setStatus('Auth Failed');
+      setInfoMessage(job, 'auth');
       if (job.elements.btnDetails) {
         job.elements.btnDetails.style.display = 'none';
         job.elements.btnDetails.onclick = null;

@@ -27,20 +27,23 @@ async function getSettings() {
     scitrueRelation = 'relevant',
     scitrueMainfinding = false,
     scitrueUserEmail = '',
-    scitrueYear = 'All Years'
+    scitrueYear = 'All Years',
+    scitruePassword = ''
   } = await chrome.storage.local.get({
     scitrueK: 5,
     scitrueRelation: 'relevant',
     scitrueMainfinding: false,
     scitrueUserEmail: '',
-    scitrueYear: 'All Years'
+    scitrueYear: 'All Years',
+    scitruePassword: ''
   });
   return {
     scitrueK: clampK(scitrueK),
     scitrueRelation,
     scitrueMainfinding: !!scitrueMainfinding,
     scitrueUserEmail: String(scitrueUserEmail || ''),
-    scitrueYear
+    scitrueYear,
+    scitruePassword: String(scitruePassword || ''),
   };
 }
 async function setSettings({ scitrueK, scitrueRelation, scitrueMainfinding, scitrueYear }) {
@@ -174,7 +177,7 @@ function showSettings(email) {
       if (!res.ok) { showAuthError(`HTTP ${res.status}`); return; }
       const data = await res.json();
       if (data && data.ok === true) {
-        await chrome.storage.local.set({ scitrueUserEmail: email, scitrueEnabled: true });
+        await chrome.storage.local.set({ scitrueUserEmail: email, scitruePassword: pwd, scitrueEnabled: true });
         renderEnabled(true);
         showSettings(email);
       } else {
@@ -191,7 +194,7 @@ function showSettings(email) {
   });
 
   logoutBtn.addEventListener('click', async () => {
-    await chrome.storage.local.remove(['scitrueUserEmail']);
+    await chrome.storage.local.remove(['scitrueUserEmail', 'scitruePassword']);
     await setEnabled(false);
     renderEnabled(false);
     showAuth();
