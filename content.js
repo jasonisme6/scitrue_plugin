@@ -75,7 +75,7 @@
   };
 
   const SUBCLAIM_BG_COLORS = [
-        '#E6E6FA', '#FFEFD5', '#F0FFFF', '#F7B7B7', '#E0FFE0',
+        '#E6E6FA', '#FFEFD5', '#F0FFFF', '#EDEAE4', '#E0FFE0',
         '#FFF0F5', '#F5F5DC', '#FFE4C4', '#E0FFFF', '#FFFACD'
   ];
 
